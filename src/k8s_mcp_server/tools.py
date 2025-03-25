@@ -7,10 +7,9 @@ This module provides utilities for validating and executing commands, including:
 """
 
 import asyncio
-import logging
 import shlex
 import time
-from typing import Dict, List, Optional, TypedDict
+from typing import TypedDict
 
 from k8s_mcp_server.config import DEFAULT_TIMEOUT, MAX_OUTPUT_SIZE
 from k8s_mcp_server.logging_utils import get_logger
@@ -92,9 +91,9 @@ class CommandResult(TypedDict, total=False):
 
     status: str
     output: str
-    error: Optional[Dict[str, str]]
-    exit_code: Optional[int]
-    execution_time: Optional[float]
+    error: dict[str, str] | None
+    exit_code: int | None
+    execution_time: float | None
 
 
 def is_valid_k8s_tool(command: str) -> bool:
@@ -220,7 +219,7 @@ async def execute_piped_command(pipe_command: str, timeout: int | None = None) -
                 logger.error(f"Error killing process: {e}")
             execution_time = time.time() - start_time
             return CommandResult(
-                status="error", 
+                status="error",
                 output=f"Command timed out after {timeout} seconds",
                 error={"message": f"Command timed out after {timeout} seconds", "code": "TIMEOUT_ERROR"},
                 execution_time=execution_time
@@ -240,7 +239,7 @@ async def execute_piped_command(pipe_command: str, timeout: int | None = None) -
             logger.warning(f"Piped command failed with return code {process.returncode}: {pipe_command}")
             logger.debug(f"Command error output: {stderr_str}")
             return CommandResult(
-                status="error", 
+                status="error",
                 output=stderr_str or "Command failed with no error output",
                 error={
                     "message": stderr_str or "Command failed with no error output",
@@ -254,7 +253,7 @@ async def execute_piped_command(pipe_command: str, timeout: int | None = None) -
             )
 
         return CommandResult(
-            status="success", 
+            status="success",
             output=stdout_str,
             exit_code=process.returncode,
             execution_time=execution_time

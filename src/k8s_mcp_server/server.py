@@ -6,7 +6,6 @@ and documentation.
 """
 
 import asyncio
-from typing import Optional
 
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
@@ -71,10 +70,10 @@ register_prompts(mcp)
 
 
 async def _execute_tool_command(
-    tool: str, 
-    command: str, 
-    timeout: Optional[int], 
-    ctx: Optional[Context]
+    tool: str,
+    command: str,
+    timeout: int | None,
+    ctx: Context | None
 ) -> CommandResult:
     """Internal implementation for executing tool commands.
     
@@ -88,33 +87,33 @@ async def _execute_tool_command(
         CommandResult containing output and status
     """
     logger.info(f"Executing {tool} command: {command}" + (f" with timeout: {timeout}" if timeout else ""))
-    
+
     # Check if tool is installed
     if not cli_status.get(tool, False):
         message = f"{tool} is not installed or not in PATH"
         if ctx:
             await ctx.error(message)
         return CommandResult(status="error", output=message)
-    
+
     # Add tool prefix if not present
     if not command.strip().startswith(tool):
         command = f"{tool} {command}"
-    
+
     if ctx:
         is_pipe = "|" in command
         message = "Executing" + (" piped" if is_pipe else "") + f" {tool} command"
         await ctx.info(message + (f" with timeout: {timeout}s" if timeout else ""))
-    
+
     try:
         result = await execute_command(command, timeout)
-        
+
         if result["status"] == "success":
             if ctx:
                 await ctx.info(f"{tool} command executed successfully")
         else:
             if ctx:
                 await ctx.warning(f"{tool} command failed")
-        
+
         return result
     except CommandValidationError as e:
         logger.warning(f"{tool} command validation error: {e}")

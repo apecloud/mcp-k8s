@@ -8,13 +8,11 @@ timeouts, and output processing.
 import asyncio
 import shlex
 import time
-from typing import Dict, Optional, TypedDict
+from typing import TypedDict
 
 from k8s_mcp_server.config import DEFAULT_TIMEOUT, K8S_CONTEXT, K8S_NAMESPACE, MAX_OUTPUT_SIZE, SUPPORTED_CLI_TOOLS
 from k8s_mcp_server.logging_utils import get_logger
 from k8s_mcp_server.security import (
-    is_safe_exec_command,
-    validate_command,
     validate_k8s_command,
     validate_pipe_command,
 )
@@ -22,7 +20,6 @@ from k8s_mcp_server.tools import (
     CommandResult,
     execute_piped_command,
     is_pipe_command,
-    is_valid_k8s_tool,
     split_pipe_command,
 )
 
@@ -58,12 +55,12 @@ class CommandExecutionError(Exception):
 
 class ErrorDetails(TypedDict, total=False):
     """Type definition for error details."""
-    
+
     message: str
     code: str
-    command: Optional[str]
-    exit_code: Optional[int]
-    stderr: Optional[str]
+    command: str | None
+    exit_code: int | None
+    stderr: str | None
 
 
 
@@ -235,7 +232,7 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
             }
 
             return CommandResult(
-                status="error", 
+                status="error",
                 output=error_message,
                 error=error_details,
                 exit_code=process.returncode,
@@ -243,7 +240,7 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
             )
 
         return CommandResult(
-            status="success", 
+            status="success",
             output=stdout_str,
             exit_code=process.returncode,
             execution_time=execution_time

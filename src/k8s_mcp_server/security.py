@@ -1,7 +1,6 @@
 """Security utilities for K8s MCP Server."""
 
 import shlex
-from typing import Dict, List
 
 from k8s_mcp_server.tools import (
     is_pipe_command,
@@ -10,9 +9,8 @@ from k8s_mcp_server.tools import (
     validate_unix_command,
 )
 
-
 # Dictionary of potentially dangerous commands for each CLI tool
-DANGEROUS_COMMANDS: Dict[str, List[str]] = {
+DANGEROUS_COMMANDS: dict[str, list[str]] = {
     "kubectl": [
         "kubectl delete",  # Global delete without specific resource
         "kubectl drain",
@@ -36,7 +34,7 @@ DANGEROUS_COMMANDS: Dict[str, List[str]] = {
 }
 
 # Dictionary of safe patterns that override the dangerous commands
-SAFE_PATTERNS: Dict[str, List[str]] = {
+SAFE_PATTERNS: dict[str, list[str]] = {
     "kubectl": [
         "kubectl delete pod",
         "kubectl delete deployment",
@@ -108,7 +106,7 @@ def validate_k8s_command(command: str) -> None:
     cli_tool = cmd_parts[0]
     if not is_valid_k8s_tool(cli_tool):
         raise ValueError(
-            f"Command must start with a supported CLI tool: kubectl, istioctl, helm, argocd"
+            "Command must start with a supported CLI tool: kubectl, istioctl, helm, argocd"
         )
 
     if len(cmd_parts) < 2:
