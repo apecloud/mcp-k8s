@@ -79,7 +79,7 @@ def set_resource_limits():
     # Set memory limit (soft limit only)
     memory_bytes = RESOURCE_LIMITS["memory_mb"] * 1024 * 1024
     resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
-    
+
     # Note: CPU percentage limiting is handled by the OS scheduler
     # and can't be directly set with resource module
 
@@ -189,11 +189,11 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
     try:
         # Set resource limits before creating subprocess
         set_resource_limits()
-        
+
         # Create subprocess with resource limits
         process = await asyncio.create_subprocess_shell(
-            command, 
-            stdout=asyncio.subprocess.PIPE, 
+            command,
+            stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             preexec_fn=set_resource_limits  # Apply limits to child process
         )
