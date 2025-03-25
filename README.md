@@ -239,11 +239,76 @@ pytest tests/unit/test_server.py::test_describe_command
 pytest -m unit --cov=k8s_mcp_server --cov-report=term-missing
 ```
 
-### Setting Up for Integration Tests
+### Running Integration Tests
 
-Integration tests require a functioning Kubernetes cluster. For local development, you can use one of the following:
+Integration tests require a functioning Kubernetes cluster. You can either use an existing cluster or set up a local one.
 
-#### Option 1: Minikube
+#### Option 1: Using an Existing Kubernetes Cluster
+
+The simplest approach is to use an existing Kubernetes cluster by specifying which context to use:
+
+```bash
+# Run integration tests with the currently active context
+pytest -m integration
+
+# Run with a specific context
+K8S_CONTEXT=my-cluster-context pytest -m integration
+
+# Run specific integration test file
+pytest tests/integration/test_k8s_tools.py
+```
+
+Benefits of this approach:
+- No need to set up a separate cluster for testing
+- Works with any Kubernetes distribution (EKS, GKE, AKS, k3s, k0s, etc.)
+- Tests run against the same environment you're developing for
+- Faster test execution since there's no cluster setup/teardown
+
+#### Option 2: Setting Up a Local Kubernetes Cluster for Development
+
+For local development, we recommend setting up a lightweight Kubernetes cluster:
+
+**Using k3s (Recommended for Linux):**
+
+[k3s](https://k3s.io/) is a certified lightweight Kubernetes distribution:
+
+```bash
+# Install k3s
+curl -sfL https://get.k3s.io | sh -
+
+# Get kubeconfig (sudo is required to read the config)
+sudo cat /etc/rancher/k3s/k3s.yaml > ~/.kube/k3s-config
+# Fix permissions
+chmod 600 ~/.kube/k3s-config
+# Set KUBECONFIG to use this file
+export KUBECONFIG=~/.kube/k3s-config
+
+# Verify it's running
+kubectl get nodes
+```
+
+**Using k0s (Recommended for all platforms):**
+
+[k0s](https://k0sproject.io/) is a zero-friction Kubernetes distribution:
+
+```bash
+# Install k0s
+curl -sSLf https://get.k0s.sh | sh
+
+# Create a single-node cluster
+sudo k0s install controller --single
+sudo k0s start
+
+# Get kubeconfig
+sudo k0s kubeconfig admin > ~/.kube/k0s-config
+chmod 600 ~/.kube/k0s-config
+export KUBECONFIG=~/.kube/k0s-config
+
+# Verify it's running
+kubectl get nodes
+```
+
+**Using Minikube:**
 
 [Minikube](https://minikube.sigs.k8s.io/docs/start/) creates a local Kubernetes cluster within a VM or container:
 
@@ -259,7 +324,7 @@ minikube start
 kubectl get nodes
 ```
 
-#### Option 2: Kind (Kubernetes in Docker)
+**Using Kind (Kubernetes in Docker):**
 
 [Kind](https://kind.sigs.k8s.io/docs/user/quick-start/) runs Kubernetes clusters using Docker containers as nodes:
 
@@ -275,7 +340,7 @@ kind create cluster --name k8s-mcp-test
 kubectl get nodes
 ```
 
-#### Option 3: K3d (Lightweight Kubernetes)
+**Using K3d (Lightweight Kubernetes):**
 
 [K3d](https://k3d.io/) is a lightweight wrapper to run [k3s](https://k3s.io/) in Docker:
 
@@ -291,22 +356,38 @@ k3d cluster create k8s-mcp-test
 kubectl get nodes
 ```
 
-### Running Integration Tests
+### Integration Test Process
 
-Once you have a local Kubernetes cluster running:
+Integration tests validate the functionality of k8s-mcp-server against a real Kubernetes cluster. They:
+
+1. Verify that CLI tools work correctly when executed through the server
+2. Test namespace creation and management
+3. Deploy test pods to verify resource creation works
+4. Test help text retrieval for commands
+5. Verify tool-specific features (kubectl, helm, etc.)
+
+Integration tests are automatically skipped if:
+- No Kubernetes cluster is available
+- Required CLI tools (kubectl, helm, etc.) aren't installed
+
+#### Environment Variables for Integration Tests
+
+You can customize the integration tests with these environment variables:
+
+| Environment Variable | Description | Default |
+|----------------------|-------------|---------|
+| `K8S_CONTEXT` | Kubernetes context to use for tests | *current context* |
+| `K8S_SKIP_CLEANUP` | Skip cleanup of test resources | `False` |
+
+Example usage:
 
 ```bash
-# Run just the integration tests
-pytest -m integration
+# Use a specific context
+K8S_CONTEXT=my-dev-cluster pytest -m integration
 
-# Run specific integration test file
-pytest tests/integration/test_k8s_tools.py
-
-# Skip integration tests when running all tests
-pytest -k "not integration"
+# Skip cleanup of test resources (useful for debugging)
+K8S_SKIP_CLEANUP=true pytest -m integration
 ```
-
-Integration tests are automatically skipped if no Kubernetes cluster is available or if specific CLI tools are not installed.
 
 ## Building from Source
 
