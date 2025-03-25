@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "k8s-mcp-server"
+version = "1.1.0"
+description = "MCP Server for Kubernetes CLI tools (kubectl, istioctl, helm, argocd)"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "mcp",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "ruff",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 120
+target-version = ['py313']
+
+[tool.ruff]
+line-length = 120
+target-version = 'py313'
+select = ["E", "F", "W", "I", "N", "UP", "B", "A"]
+ignore = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "--cov=k8s_mcp_server"
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as integration tests requiring a Kubernetes cluster",
+    "unit: marks tests as unit tests not requiring external dependencies"
+]

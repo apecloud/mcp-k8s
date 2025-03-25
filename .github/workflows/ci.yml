@@ -1,0 +1,47 @@
+name: PR Validation
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'deploy/**'
+      - '*.md'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[ci skip]') && !contains(github.event.head_commit.message, '[skip ci]')"
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Lint with ruff
+        run: |
+          ruff check . --output-format=github
+          ruff format --check .
+
+      - name: Run unit tests
+        run: |
+          # Only run unit tests, skip integration tests that require Kubernetes cluster
+          pytest -v -m unit
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
