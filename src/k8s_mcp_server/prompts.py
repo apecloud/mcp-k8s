@@ -28,7 +28,7 @@ def register_prompts(mcp):
         Returns:
             Formatted prompt string for resource status checks
         """
-        return f"""Generate kubectl commands to check the status of {resource_type} 
+        return f"""Generate kubectl commands to check the status of {resource_type}
 in the {namespace} namespace.
 
 Include commands to:
@@ -55,7 +55,7 @@ Structure the commands to be easily executed and parsed."""
         Returns:
             Formatted prompt string for application deployment
         """
-        return f"""Generate kubectl commands to deploy an application named '{app_name}' 
+        return f"""Generate kubectl commands to deploy an application named '{app_name}'
 using the image '{image}' with {replicas} replicas in the {namespace} namespace.
 
 Include commands to:
@@ -80,7 +80,7 @@ The deployment should follow Kubernetes best practices for security and reliabil
         Returns:
             Formatted prompt string for troubleshooting commands
         """
-        return f"""Generate kubectl commands to troubleshoot issues with the {resource_type} 
+        return f"""Generate kubectl commands to troubleshoot issues with the {resource_type}
 named '{resource_name}' in the {namespace} namespace.
 
 Include commands to:
@@ -104,7 +104,7 @@ Organize the commands in a systematic troubleshooting flow from basic to advance
             Formatted prompt string for resource inventory commands
         """
         scope = f"in the {namespace} namespace" if namespace else "across all namespaces"
-        return f"""Generate kubectl commands to create a comprehensive inventory 
+        return f"""Generate kubectl commands to create a comprehensive inventory
 of resources {scope}.
 
 Include commands to:
@@ -128,7 +128,7 @@ Structure the commands to build a complete picture of the cluster state."""
             Formatted prompt string for security check commands
         """
         scope = f"in the {namespace} namespace" if namespace else "across the entire cluster"
-        return f"""Generate kubectl commands to perform a security assessment 
+        return f"""Generate kubectl commands to perform a security assessment
 of Kubernetes resources {scope}.
 
 Include commands to check for:
@@ -153,7 +153,7 @@ Explain the security implications of each check and provide remediation suggesti
         Returns:
             Formatted prompt string for scaling commands
         """
-        return f"""Generate kubectl commands to scale the {resource_type} 
+        return f"""Generate kubectl commands to scale the {resource_type}
 named '{resource_name}' in the {namespace} namespace.
 
 Include commands to:
@@ -179,7 +179,7 @@ Provide commands for both scaling up and down with appropriate checks and valida
             Formatted prompt string for log analysis commands
         """
         container_clause = f" container '{container}' in" if container else ""
-        return f"""Generate kubectl commands to analyze logs from{container_clause} 
+        return f"""Generate kubectl commands to analyze logs from{container_clause}
 pod '{pod_name}' in the {namespace} namespace.
 
 Include commands to:
@@ -190,7 +190,7 @@ Include commands to:
 5. Extract and analyze specific log sections
 6. Export logs for offline analysis
 
-Provide commands that can help identify common issues like application errors, 
+Provide commands that can help identify common issues like application errors,
 crashes, resource constraints, or performance problems."""
 
     @mcp.prompt()
@@ -203,7 +203,7 @@ crashes, resource constraints, or performance problems."""
         Returns:
             Formatted prompt string for Istio management commands
         """
-        return f"""Generate istioctl commands to manage and analyze the Istio service mesh 
+        return f"""Generate istioctl commands to manage and analyze the Istio service mesh
 in the {namespace} namespace.
 
 Include commands to:
@@ -228,7 +228,7 @@ The commands should follow Istio best practices and focus on operational excelle
             Formatted prompt string for Helm management commands
         """
         release_specific = f"for release '{release_name}'" if release_name else "for all releases"
-        return f"""Generate helm commands to manage Helm charts {release_specific} 
+        return f"""Generate helm commands to manage Helm charts {release_specific}
 in the {namespace} namespace.
 
 Include commands to:
@@ -253,7 +253,7 @@ The commands should follow Helm best practices and include proper validation ste
             Formatted prompt string for ArgoCD management commands
         """
         app_specific = f"for application '{app_name}'" if app_name else "for all applications"
-        return f"""Generate argocd commands to manage GitOps deployments {app_specific} 
+        return f"""Generate argocd commands to manage GitOps deployments {app_specific}
 with ArgoCD in the {namespace} namespace.
 
 Include commands to:
