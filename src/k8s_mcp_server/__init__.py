@@ -6,3 +6,6 @@ safe, containerized environment.
 """
 
 __version__ = "1.1.0"
+"""K8s MCP Server package."""
+
+__version__ = "1.1.0"

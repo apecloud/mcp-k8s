@@ -12,8 +12,10 @@ Environment variables:
 import os
 from pathlib import Path
 
+from k8s_mcp_server import __version__
+
 # Server information
-SERVER_INFO = {"name": "K8s MCP Server", "version": "1.1.0"}
+SERVER_INFO = {"name": "K8s MCP Server", "version": __version__}
 
 # Command execution settings
 DEFAULT_TIMEOUT = int(os.environ.get("K8S_MCP_TIMEOUT", "300"))

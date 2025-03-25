@@ -6,8 +6,7 @@ and documentation.
 """
 
 import asyncio
-import logging
-import sys
+from typing import Optional
 
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
@@ -22,11 +21,12 @@ from k8s_mcp_server.cli_executor import (
     get_command_help,
 )
 from k8s_mcp_server.config import INSTRUCTIONS, SERVER_INFO, SUPPORTED_CLI_TOOLS
+from k8s_mcp_server.logging_utils import configure_root_logger, get_logger
 from k8s_mcp_server.prompts import register_prompts
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", handlers=[logging.StreamHandler(sys.stderr)])
-logger = logging.getLogger("k8s-mcp-server")
+configure_root_logger()
+logger = get_logger("server")
 
 
 # Function to run startup checks in synchronous context
@@ -68,6 +68,63 @@ mcp = FastMCP(
 
 # Register prompt templates
 register_prompts(mcp)
+
+
+async def _execute_tool_command(
+    tool: str, 
+    command: str, 
+    timeout: Optional[int], 
+    ctx: Optional[Context]
+) -> CommandResult:
+    """Internal implementation for executing tool commands.
+    
+    Args:
+        tool: The CLI tool name (kubectl, istioctl, helm, argocd)
+        command: The command to execute
+        timeout: Optional timeout in seconds
+        ctx: Optional MCP context for request tracking
+        
+    Returns:
+        CommandResult containing output and status
+    """
+    logger.info(f"Executing {tool} command: {command}" + (f" with timeout: {timeout}" if timeout else ""))
+    
+    # Check if tool is installed
+    if not cli_status.get(tool, False):
+        message = f"{tool} is not installed or not in PATH"
+        if ctx:
+            await ctx.error(message)
+        return CommandResult(status="error", output=message)
+    
+    # Add tool prefix if not present
+    if not command.strip().startswith(tool):
+        command = f"{tool} {command}"
+    
+    if ctx:
+        is_pipe = "|" in command
+        message = "Executing" + (" piped" if is_pipe else "") + f" {tool} command"
+        await ctx.info(message + (f" with timeout: {timeout}s" if timeout else ""))
+    
+    try:
+        result = await execute_command(command, timeout)
+        
+        if result["status"] == "success":
+            if ctx:
+                await ctx.info(f"{tool} command executed successfully")
+        else:
+            if ctx:
+                await ctx.warning(f"{tool} command failed")
+        
+        return result
+    except CommandValidationError as e:
+        logger.warning(f"{tool} command validation error: {e}")
+        return CommandResult(status="error", output=f"Command validation error: {str(e)}")
+    except CommandExecutionError as e:
+        logger.warning(f"{tool} command execution error: {e}")
+        return CommandResult(status="error", output=f"Command execution error: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error in execute_{tool}: {e}")
+        return CommandResult(status="error", output=f"Unexpected error: {str(e)}")
 
 
 # Tool-specific command documentation functions
@@ -224,45 +281,7 @@ async def execute_kubectl(
     Returns:
         CommandResult containing output and status
     """
-    logger.info(f"Executing kubectl command: {command}" + (f" with timeout: {timeout}" if timeout else ""))
-
-    # Check if kubectl is installed
-    if not cli_status.get("kubectl", False):
-        message = "kubectl is not installed or not in PATH"
-        if ctx:
-            await ctx.error(message)
-        return CommandResult(status="error", output=message)
-
-    # Add kubectl prefix if not present
-    if not command.strip().startswith("kubectl"):
-        command = f"kubectl {command}"
-
-    if ctx:
-        is_pipe = "|" in command
-        message = "Executing" + (" piped" if is_pipe else "") + " kubectl command"
-        await ctx.info(message + (f" with timeout: {timeout}s" if timeout else ""))
-
-    try:
-        result = await execute_command(command, timeout)
-
-        # Format the output for better readability
-        if result["status"] == "success":
-            if ctx:
-                await ctx.info("kubectl command executed successfully")
-        else:
-            if ctx:
-                await ctx.warning("kubectl command failed")
-
-        return CommandResult(status=result["status"], output=result["output"])
-    except CommandValidationError as e:
-        logger.warning(f"kubectl command validation error: {e}")
-        return CommandResult(status="error", output=f"Command validation error: {str(e)}")
-    except CommandExecutionError as e:
-        logger.warning(f"kubectl command execution error: {e}")
-        return CommandResult(status="error", output=f"Command execution error: {str(e)}")
-    except Exception as e:
-        logger.error(f"Error in execute_kubectl: {e}")
-        return CommandResult(status="error", output=f"Unexpected error: {str(e)}")
+    return await _execute_tool_command("kubectl", command, timeout, ctx)
 
 
 @mcp.tool()
@@ -281,45 +300,7 @@ async def execute_helm(
     Returns:
         CommandResult containing output and status
     """
-    logger.info(f"Executing Helm command: {command}" + (f" with timeout: {timeout}" if timeout else ""))
-
-    # Check if Helm is installed
-    if not cli_status.get("helm", False):
-        message = "helm is not installed or not in PATH"
-        if ctx:
-            await ctx.error(message)
-        return CommandResult(status="error", output=message)
-
-    # Add helm prefix if not present
-    if not command.strip().startswith("helm"):
-        command = f"helm {command}"
-
-    if ctx:
-        is_pipe = "|" in command
-        message = "Executing" + (" piped" if is_pipe else "") + " Helm command"
-        await ctx.info(message + (f" with timeout: {timeout}s" if timeout else ""))
-
-    try:
-        result = await execute_command(command, timeout)
-
-        # Format the output for better readability
-        if result["status"] == "success":
-            if ctx:
-                await ctx.info("Helm command executed successfully")
-        else:
-            if ctx:
-                await ctx.warning("Helm command failed")
-
-        return CommandResult(status=result["status"], output=result["output"])
-    except CommandValidationError as e:
-        logger.warning(f"Helm command validation error: {e}")
-        return CommandResult(status="error", output=f"Command validation error: {str(e)}")
-    except CommandExecutionError as e:
-        logger.warning(f"Helm command execution error: {e}")
-        return CommandResult(status="error", output=f"Command execution error: {str(e)}")
-    except Exception as e:
-        logger.error(f"Error in execute_helm: {e}")
-        return CommandResult(status="error", output=f"Unexpected error: {str(e)}")
+    return await _execute_tool_command("helm", command, timeout, ctx)
 
 
 @mcp.tool()
@@ -338,45 +319,7 @@ async def execute_istioctl(
     Returns:
         CommandResult containing output and status
     """
-    logger.info(f"Executing istioctl command: {command}" + (f" with timeout: {timeout}" if timeout else ""))
-
-    # Check if istioctl is installed
-    if not cli_status.get("istioctl", False):
-        message = "istioctl is not installed or not in PATH"
-        if ctx:
-            await ctx.error(message)
-        return CommandResult(status="error", output=message)
-
-    # Add istioctl prefix if not present
-    if not command.strip().startswith("istioctl"):
-        command = f"istioctl {command}"
-
-    if ctx:
-        is_pipe = "|" in command
-        message = "Executing" + (" piped" if is_pipe else "") + " istioctl command"
-        await ctx.info(message + (f" with timeout: {timeout}s" if timeout else ""))
-
-    try:
-        result = await execute_command(command, timeout)
-
-        # Format the output for better readability
-        if result["status"] == "success":
-            if ctx:
-                await ctx.info("istioctl command executed successfully")
-        else:
-            if ctx:
-                await ctx.warning("istioctl command failed")
-
-        return CommandResult(status=result["status"], output=result["output"])
-    except CommandValidationError as e:
-        logger.warning(f"istioctl command validation error: {e}")
-        return CommandResult(status="error", output=f"Command validation error: {str(e)}")
-    except CommandExecutionError as e:
-        logger.warning(f"istioctl command execution error: {e}")
-        return CommandResult(status="error", output=f"Command execution error: {str(e)}")
-    except Exception as e:
-        logger.error(f"Error in execute_istioctl: {e}")
-        return CommandResult(status="error", output=f"Unexpected error: {str(e)}")
+    return await _execute_tool_command("istioctl", command, timeout, ctx)
 
 
 @mcp.tool()
@@ -395,42 +338,4 @@ async def execute_argocd(
     Returns:
         CommandResult containing output and status
     """
-    logger.info(f"Executing ArgoCD command: {command}" + (f" with timeout: {timeout}" if timeout else ""))
-
-    # Check if ArgoCD is installed
-    if not cli_status.get("argocd", False):
-        message = "argocd is not installed or not in PATH"
-        if ctx:
-            await ctx.error(message)
-        return CommandResult(status="error", output=message)
-
-    # Add argocd prefix if not present
-    if not command.strip().startswith("argocd"):
-        command = f"argocd {command}"
-
-    if ctx:
-        is_pipe = "|" in command
-        message = "Executing" + (" piped" if is_pipe else "") + " ArgoCD command"
-        await ctx.info(message + (f" with timeout: {timeout}s" if timeout else ""))
-
-    try:
-        result = await execute_command(command, timeout)
-
-        # Format the output for better readability
-        if result["status"] == "success":
-            if ctx:
-                await ctx.info("ArgoCD command executed successfully")
-        else:
-            if ctx:
-                await ctx.warning("ArgoCD command failed")
-
-        return CommandResult(status=result["status"], output=result["output"])
-    except CommandValidationError as e:
-        logger.warning(f"ArgoCD command validation error: {e}")
-        return CommandResult(status="error", output=f"Command validation error: {str(e)}")
-    except CommandExecutionError as e:
-        logger.warning(f"ArgoCD command execution error: {e}")
-        return CommandResult(status="error", output=f"Command execution error: {str(e)}")
-    except Exception as e:
-        logger.error(f"Error in execute_argocd: {e}")
-        return CommandResult(status="error", output=f"Unexpected error: {str(e)}")
+    return await _execute_tool_command("argocd", command, timeout, ctx)

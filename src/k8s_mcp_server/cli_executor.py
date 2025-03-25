@@ -6,22 +6,28 @@ timeouts, and output processing.
 """
 
 import asyncio
-import logging
 import shlex
-from typing import TypedDict
+import time
+from typing import Dict, Optional, TypedDict
 
 from k8s_mcp_server.config import DEFAULT_TIMEOUT, K8S_CONTEXT, K8S_NAMESPACE, MAX_OUTPUT_SIZE, SUPPORTED_CLI_TOOLS
+from k8s_mcp_server.logging_utils import get_logger
+from k8s_mcp_server.security import (
+    is_safe_exec_command,
+    validate_command,
+    validate_k8s_command,
+    validate_pipe_command,
+)
 from k8s_mcp_server.tools import (
     CommandResult,
     execute_piped_command,
     is_pipe_command,
     is_valid_k8s_tool,
     split_pipe_command,
-    validate_unix_command,
 )
 
 # Configure module logger
-logger = logging.getLogger(__name__)
+logger = get_logger("cli_executor")
 
 
 class CommandHelpResult(TypedDict):
@@ -50,85 +56,16 @@ class CommandExecutionError(Exception):
     pass
 
 
-# Dictionary of potentially dangerous commands for each CLI tool
-DANGEROUS_COMMANDS: dict[str, list[str]] = {
-    "kubectl": [
-        "kubectl delete",  # Global delete without specific resource
-        "kubectl drain",
-        "kubectl replace --force",
-        "kubectl exec",  # Handled specially to prevent interactive shells
-    ],
-    "istioctl": [
-        "istioctl experimental",
-        "istioctl proxy-config",  # Can access sensitive information
-    ],
-    "helm": [
-        "helm delete",
-        "helm uninstall",
-        "helm rollback",
-    ],
-    "argocd": [
-        "argocd app delete",
-        "argocd cluster rm",
-        "argocd repo rm",
-    ],
-}
-
-# Dictionary of safe patterns that override the dangerous commands
-SAFE_PATTERNS: dict[str, list[str]] = {
-    "kubectl": [
-        "kubectl delete pod",
-        "kubectl delete deployment",
-        "kubectl delete service",
-        "kubectl delete configmap",
-        "kubectl delete secret",
-        # Specific exec commands that are safe
-        "kubectl exec --help",
-        "kubectl exec -it",  # Allow interactive mode that's explicitly requested
-    ],
-    "istioctl": [
-        "istioctl experimental -h",
-        "istioctl experimental --help",
-        "istioctl proxy-config --help",
-    ],
-    "helm": [
-        "helm delete --help",
-        "helm uninstall --help",
-        "helm rollback --help",
-    ],
-    "argocd": [
-        "argocd app delete --help",
-        "argocd cluster rm --help",
-        "argocd repo rm --help",
-    ],
-}
+class ErrorDetails(TypedDict, total=False):
+    """Type definition for error details."""
+    
+    message: str
+    code: str
+    command: Optional[str]
+    exit_code: Optional[int]
+    stderr: Optional[str]
 
 
-def is_safe_exec_command(command: str) -> bool:
-    """Check if a kubectl exec command is safe to execute.
-
-    We consider a kubectl exec command safe if it doesn't try to start an interactive shell
-    without explicit -it flags and doesn't use dangerous commands like bash/sh without args.
-
-    Args:
-        command: The kubectl exec command
-
-    Returns:
-        True if the command is safe, False otherwise
-    """
-    if not command.startswith("kubectl exec"):
-        return True  # Not an exec command
-
-    # Check for explicit interactive mode
-    has_interactive = "-i" in command or "--stdin" in command or "-it" in command or "-ti" in command
-
-    # Check for shell commands that might be used without proper args
-    dangerous_shell_patterns = [" -- sh", " -- bash", " -- /bin/sh", " -- /bin/bash"]
-    has_dangerous_shell = any(pattern in command + " " for pattern in dangerous_shell_patterns)
-
-    # If interactive is explicitly requested AND not trying to just get a shell, it's safe
-    # Or if it's non-interactive (like running a specific command), it's safe
-    return (has_interactive and not has_dangerous_shell) or (not has_interactive)
 
 
 async def check_cli_installed(cli_tool: str) -> bool:
@@ -154,82 +91,8 @@ async def check_cli_installed(cli_tool: str) -> bool:
         return False
 
 
-def validate_k8s_command(command: str) -> None:
-    """Validate that the command is a proper Kubernetes CLI command.
-
-    Args:
-        command: The Kubernetes CLI command to validate
-
-    Raises:
-        CommandValidationError: If the command is invalid
-    """
-    cmd_parts = shlex.split(command)
-    if not cmd_parts:
-        raise CommandValidationError("Empty command")
-
-    cli_tool = cmd_parts[0]
-    if not is_valid_k8s_tool(cli_tool):
-        raise CommandValidationError(
-            f"Command must start with a supported CLI tool: {', '.join(SUPPORTED_CLI_TOOLS.keys())}"
-        )
-
-    if len(cmd_parts) < 2:
-        raise CommandValidationError(f"Command must include a {cli_tool} action")
-
-    # Special case for kubectl exec
-    if cli_tool == "kubectl" and "exec" in cmd_parts:
-        if not is_safe_exec_command(command):
-            raise CommandValidationError(
-                "Interactive shells via kubectl exec are restricted. "
-                "Use explicit commands or proper flags (-it, --command, etc)."
-            )
-
-    # Check against dangerous commands
-    if cli_tool in DANGEROUS_COMMANDS:
-        for dangerous_cmd in DANGEROUS_COMMANDS[cli_tool]:
-            if command.startswith(dangerous_cmd):
-                # Check if it matches a safe pattern
-                if cli_tool in SAFE_PATTERNS:
-                    if any(command.startswith(safe_pattern) for safe_pattern in SAFE_PATTERNS[cli_tool]):
-                        return  # Safe pattern match, allow command
-
-                raise CommandValidationError(
-                    "This command is restricted for safety reasons. "
-                    "Please use a more specific form with resource type and name."
-                )
 
 
-def validate_pipe_command(pipe_command: str) -> None:
-    """Validate a command that contains pipes.
-
-    This checks both Kubernetes CLI commands and Unix commands within a pipe chain.
-
-    Args:
-        pipe_command: The piped command to validate
-
-    Raises:
-        CommandValidationError: If any command in the pipe is invalid
-    """
-    commands = split_pipe_command(pipe_command)
-
-    if not commands:
-        raise CommandValidationError("Empty command")
-
-    # First command must be a Kubernetes CLI command
-    validate_k8s_command(commands[0])
-
-    # Subsequent commands should be valid Unix commands
-    for i, cmd in enumerate(commands[1:], 1):
-        cmd_parts = shlex.split(cmd)
-        if not cmd_parts:
-            raise CommandValidationError(f"Empty command at position {i} in pipe")
-
-        if not validate_unix_command(cmd):
-            cli_tools_str = ", ".join(SUPPORTED_CLI_TOOLS.keys())
-            raise CommandValidationError(
-                f"Command '{cmd_parts[0]}' at position {i} in pipe is not allowed. "
-                f"Only {cli_tools_str} commands and basic Unix utilities are permitted."
-            )
 
 
 def is_auth_error(error_output: str) -> bool:
@@ -293,7 +156,10 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
         return await execute_pipe_command(command, timeout)
 
     # Validate the command
-    validate_k8s_command(command)
+    try:
+        validate_k8s_command(command)
+    except ValueError as e:
+        raise CommandValidationError(str(e)) from e
 
     # Handle context and namespace for kubectl commands
     command = inject_context_namespace(command)
@@ -303,6 +169,7 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
         timeout = DEFAULT_TIMEOUT
 
     logger.debug(f"Executing command: {command}")
+    start_time = time.time()
 
     try:
         # Create subprocess
@@ -318,11 +185,18 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
                 process.kill()
             except Exception as e:
                 logger.error(f"Error killing process: {e}")
+            execution_time = time.time() - start_time
+            error_details = {
+                "message": f"Command timed out after {timeout} seconds",
+                "code": "TIMEOUT_ERROR",
+                "command": command
+            }
             raise CommandExecutionError(f"Command timed out after {timeout} seconds") from timeout_error
 
         # Process output
         stdout_str = stdout.decode("utf-8", errors="replace")
         stderr_str = stderr.decode("utf-8", errors="replace")
+        execution_time = time.time() - start_time
 
         # Truncate output if necessary
         if len(stdout_str) > MAX_OUTPUT_SIZE:
@@ -333,7 +207,11 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
             logger.warning(f"Command failed with return code {process.returncode}: {command}")
             logger.debug(f"Command error output: {stderr_str}")
 
+            error_code = "EXECUTION_ERROR"
+            error_message = stderr_str or "Command failed with no error output"
+
             if is_auth_error(stderr_str):
+                error_code = "AUTH_ERROR"
                 cli_tool = get_tool_from_command(command)
                 auth_error_msg = f"Authentication error: {stderr_str}"
 
@@ -346,11 +224,30 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
                 elif cli_tool == "argocd":
                     auth_error_msg += "\nPlease check your ArgoCD login status."
 
-                return CommandResult(status="error", output=auth_error_msg)
+                error_message = auth_error_msg
 
-            return CommandResult(status="error", output=stderr_str or "Command failed with no error output")
+            error_details = {
+                "message": error_message,
+                "code": error_code,
+                "command": command,
+                "exit_code": process.returncode,
+                "stderr": stderr_str
+            }
 
-        return CommandResult(status="success", output=stdout_str)
+            return CommandResult(
+                status="error", 
+                output=error_message,
+                error=error_details,
+                exit_code=process.returncode,
+                execution_time=execution_time
+            )
+
+        return CommandResult(
+            status="success", 
+            output=stdout_str,
+            exit_code=process.returncode,
+            execution_time=execution_time
+        )
     except asyncio.CancelledError:
         raise
     except Exception as e:
@@ -413,7 +310,7 @@ async def execute_pipe_command(pipe_command: str, timeout: int | None = None) ->
     # Validate the pipe command
     try:
         validate_pipe_command(pipe_command)
-    except CommandValidationError as e:
+    except ValueError as e:
         raise CommandValidationError(f"Invalid pipe command: {str(e)}") from e
 
     # Handle context and namespace injection
