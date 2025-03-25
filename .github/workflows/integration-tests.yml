@@ -1,0 +1,101 @@
+name: Integration Tests
+
+on:
+  # Run on pull requests that aren't just docs/deployment changes
+  pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'deploy/docker/**'
+
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        description: 'Run the workflow with tmate debugging enabled'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip integration]')"
+    
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+      # Don't cancel other matrix jobs if one fails
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Create k8s Kind Cluster
+        uses: container-tools/kind-action@v2
+        with:
+          cluster_name: "test-cluster"
+          version: "v0.20.0"
+          wait: 120s
+          config: |
+            kind: Cluster
+            apiVersion: kind.x-k8s.io/v1alpha4
+            nodes:
+            - role: control-plane
+              kubeadmConfigPatches:
+              - |
+                kind: InitConfiguration
+                nodeRegistration:
+                  kubeletExtraArgs:
+                    node-labels: "ingress-ready=true"
+
+      - name: Check Kubernetes status
+        run: |
+          kubectl cluster-info
+          kubectl get nodes -o wide
+          kubectl get pods -A
+
+      - name: Install K8s CLI tools
+        run: |
+          # Install Helm
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          
+          # Install istioctl (latest version)
+          ISTIO_VERSION=$(curl -sL https://github.com/istio/istio/releases/latest | grep -o "v[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1)
+          curl -L https://istio.io/downloadIstio | ISTIO_VERSION=${ISTIO_VERSION} sh -
+          sudo mv istio-${ISTIO_VERSION}/bin/istioctl /usr/local/bin/
+          
+          # Install ArgoCD CLI
+          curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+          rm argocd-linux-amd64
+          
+          # Verify all tools are installed
+          echo "Verifying installed CLI tools:"
+          kubectl version --client
+          helm version
+          istioctl version --remote=false
+          argocd version --client
+
+      - name: Setup tmate debug session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Run integration tests
+        run: |
+          # Run integration tests with the Kind cluster
+          pytest -v -m integration

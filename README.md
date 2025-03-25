@@ -389,6 +389,20 @@ K8S_CONTEXT=my-dev-cluster pytest -m integration
 K8S_SKIP_CLEANUP=true pytest -m integration
 ```
 
+#### Continuous Integration with GitHub Actions
+
+The project includes GitHub Actions workflows that automatically run integration tests:
+
+1. **CI Workflow**: Runs unit tests on every PR to ensure code quality
+2. **Integration Tests Workflow**: Sets up a Kind (Kubernetes in Docker) cluster and runs integration tests against it
+
+The integration test workflow:
+- Sets up a single-node Kind cluster
+- Installs all required CLI tools (kubectl, helm, istioctl, argocd)
+- Runs all tests marked with the 'integration' marker
+
+You can also manually trigger the integration tests from the GitHub Actions tab, with an option to enable debugging if needed.
+
 ## Building from Source
 
 ### Building the Docker Image
