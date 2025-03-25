@@ -6,7 +6,6 @@ and pipe command validation.
 """
 
 import shlex
-from typing import Dict, List
 
 from k8s_mcp_server.logging_utils import get_logger
 from k8s_mcp_server.tools import (
@@ -20,7 +19,7 @@ from k8s_mcp_server.tools import (
 logger = get_logger("security")
 
 # Dictionary of potentially dangerous commands for each CLI tool
-DANGEROUS_COMMANDS: Dict[str, List[str]] = {
+DANGEROUS_COMMANDS: dict[str, list[str]] = {
     "kubectl": [
         "kubectl delete",  # Global delete without specific resource
         "kubectl drain",
@@ -49,7 +48,7 @@ DANGEROUS_COMMANDS: Dict[str, List[str]] = {
 }
 
 # Dictionary of safe patterns that override the dangerous commands
-SAFE_PATTERNS: Dict[str, List[str]] = {
+SAFE_PATTERNS: dict[str, list[str]] = {
     "kubectl": [
         "kubectl delete pod",
         "kubectl delete deployment",
@@ -120,7 +119,7 @@ def validate_k8s_command(command: str) -> None:
         ValueError: If the command is invalid
     """
     logger.debug(f"Validating K8s command: {command}")
-    
+
     cmd_parts = shlex.split(command)
     if not cmd_parts:
         raise ValueError("Empty command")
@@ -128,7 +127,7 @@ def validate_k8s_command(command: str) -> None:
     cli_tool = cmd_parts[0]
     if not is_valid_k8s_tool(cli_tool):
         raise ValueError(
-            f"Command must start with a supported CLI tool: kubectl, istioctl, helm, argocd"
+            "Command must start with a supported CLI tool: kubectl, istioctl, helm, argocd"
         )
 
     if len(cmd_parts) < 2:
@@ -156,7 +155,7 @@ def validate_k8s_command(command: str) -> None:
                     f"This command ({dangerous_cmd}) is restricted for safety reasons. "
                     "Please use a more specific form with resource type and name."
                 )
-    
+
     logger.debug(f"Command validation successful: {command}")
 
 
@@ -172,7 +171,7 @@ def validate_pipe_command(pipe_command: str) -> None:
         ValueError: If any command in the pipe is invalid
     """
     logger.debug(f"Validating pipe command: {pipe_command}")
-    
+
     commands = split_pipe_command(pipe_command)
 
     if not commands:
@@ -192,7 +191,7 @@ def validate_pipe_command(pipe_command: str) -> None:
                 f"Command '{cmd_parts[0]}' at position {i} in pipe is not allowed. "
                 f"Only kubectl, istioctl, helm, argocd commands and basic Unix utilities are permitted."
             )
-    
+
     logger.debug(f"Pipe command validation successful: {pipe_command}")
 
 
@@ -208,10 +207,10 @@ def validate_command(command: str) -> None:
         ValueError: If the command is invalid
     """
     logger.debug(f"Validating command: {command}")
-    
+
     if is_pipe_command(command):
         validate_pipe_command(command)
     else:
         validate_k8s_command(command)
-    
+
     logger.debug(f"Command validation successful: {command}")
