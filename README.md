@@ -54,8 +54,16 @@ docker-compose -f deploy/docker/docker-compose.yml up -d
 For development or when Docker is not available:
 
 ```bash
-# Install the package
-pip install k8s-mcp-server
+# Install uv (recommended)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install the package using uv
+uv pip install k8s-mcp-server
+
+# Or install directly from source
+git clone https://github.com/yourusername/k8s-mcp-server.git
+cd k8s-mcp-server
+uv pip install -e .
 
 # Start the server
 python -m k8s_mcp_server
@@ -210,12 +218,20 @@ The server includes several safety features:
 git clone https://github.com/yourusername/k8s-mcp-server.git
 cd k8s-mcp-server
 
-# Set up a virtual environment
-python -m venv .venv
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Set up a virtual environment and install dependencies in one step with uv
+uv venv -p 3.13
+
+# Activate the virtual environment
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install in development mode
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
+
+# Alternatively, use the Makefile
+make dev-install
 ```
 
 ### Running Tests
@@ -225,9 +241,13 @@ For unit tests (no Kubernetes cluster required):
 ```bash
 # Run all unit tests only
 pytest -m unit
+# Or use the Makefile
+make test-unit
 
 # Run all tests (including both unit and integration)
 pytest
+# Or use the Makefile
+make test
 
 # Run specific test file
 pytest tests/unit/test_server.py
@@ -237,6 +257,8 @@ pytest tests/unit/test_server.py::test_describe_command
 
 # Run with coverage report 
 pytest -m unit --cov=k8s_mcp_server --cov-report=term-missing
+# Or use the Makefile
+make test-coverage
 ```
 
 ### Running Integration Tests
@@ -250,6 +272,8 @@ The simplest approach is to use an existing Kubernetes cluster by specifying whi
 ```bash
 # Run integration tests with the currently active context
 pytest -m integration
+# Or use the Makefile
+make test-integration
 
 # Run with a specific context
 K8S_CONTEXT=my-cluster-context pytest -m integration

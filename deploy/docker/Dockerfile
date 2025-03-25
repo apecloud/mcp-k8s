@@ -17,9 +17,11 @@ WORKDIR /build
 COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
 
-# Install package and dependencies with pip wheel
-RUN pip install --no-cache-dir wheel && \
-    pip wheel --no-cache-dir --wheel-dir=/wheels -e .
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install package and dependencies with uv wheel
+RUN /root/.cargo/bin/uv pip wheel --wheel-dir=/wheels -e .
 
 # =========== FINAL STAGE ===========
 FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION}
@@ -117,9 +119,12 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
 
-# Copy wheels from builder and install
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Copy wheels from builder and install with uv
 COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir --no-index --find-links=/wheels k8s-mcp-server && \
+RUN /root/.cargo/bin/uv pip install --no-index --find-links=/wheels k8s-mcp-server && \
     rm -rf /wheels
 
 # Set ownership after all files have been copied

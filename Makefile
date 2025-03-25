@@ -1,21 +1,30 @@
 .PHONY: install dev-install lint test clean docker-build docker-run docker-compose
 
-# Python related commands
+# Python related commands with uv
 install:
-	pip install -e .
+	uv pip install -e .
 
 dev-install:
-	pip install -e ".[dev]"
+	uv pip install -e ".[dev]"
 
 lint:
 	ruff check .
 	ruff format --check .
 
+format:
+	ruff format .
+
 test:
 	pytest -v
 
+test-unit:
+	pytest -v -m unit
+
+test-integration:
+	pytest -v -m integration 
+
 test-coverage:
-	pytest --cov=k8s_mcp_server
+	pytest --cov=k8s_mcp_server --cov-report=term-missing
 
 clean:
 	rm -rf build/ dist/ *.egg-info/ .pytest_cache/ .coverage htmlcov/ .ruff_cache/ __pycache__/
@@ -43,11 +52,14 @@ docker-buildx:
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  install         - Install the package"
-	@echo "  dev-install     - Install the package with development dependencies"
-	@echo "  lint            - Run linters"
-	@echo "  test            - Run unit tests"
-	@echo "  test-coverage   - Run tests with coverage"
+	@echo "  install         - Install the package using uv"
+	@echo "  dev-install     - Install the package with development dependencies using uv"
+	@echo "  lint            - Run linters (ruff)"
+	@echo "  format          - Format code with ruff"
+	@echo "  test            - Run all tests"
+	@echo "  test-unit       - Run unit tests only"
+	@echo "  test-integration - Run integration tests only (requires K8s)"
+	@echo "  test-coverage   - Run tests with coverage report"
 	@echo "  clean           - Remove build artifacts"
 	@echo "  docker-build    - Build Docker image"
 	@echo "  docker-run      - Run server in Docker with kubeconfig mounted"

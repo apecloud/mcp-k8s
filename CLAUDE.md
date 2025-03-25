@@ -2,17 +2,20 @@
 
 ## Build & Test Commands
 
-- Install dependencies: `pip install -e .`
-- Install dev dependencies: `pip install -e ".[dev]"`
+- Install dependencies: `uv pip install -e .` (or use `make install`)
+- Install dev dependencies: `uv pip install -e ".[dev]"` (or use `make dev-install`)
 - Run server: `python -m k8s_mcp_server`
-- Run tests: `pytest`
+- Run all tests: `pytest` (or use `make test`)
+- Run unit tests only: `pytest -m unit` (or use `make test-unit`)
+- Run integration tests only: `pytest -m integration` (or use `make test-integration`)
 - Run single test: `pytest tests/path/to/test_file.py::test_function_name -v`
-- Run linter: `ruff check src/ tests/`
-- Format code: `ruff format src/ tests/`
+- Run linter: `ruff check src/ tests/` (or use `make lint`)
+- Format code: `ruff format src/ tests/` (or use `make format`)
 
 ## Technical Stack
 
 - **Python version**: Python 3.13+
+- **Package management**: `uv` for fast, reliable package management
 - **Project config**: `pyproject.toml` for configuration and dependency management
 - **Environment**: Use virtual environment in `.venv` for dependency isolation
 - **Dependencies**: Separate production and dev dependencies in `pyproject.toml`
