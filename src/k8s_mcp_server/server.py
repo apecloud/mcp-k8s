@@ -272,15 +272,15 @@ async def execute_kubectl(
     ctx: Context | None = None,
 ) -> CommandResult:
     """Execute kubectl commands with support for Unix pipes.
-    
+
     Executes kubectl commands with proper validation, error handling, and resource limits.
     Supports piping output to standard Unix utilities for filtering and transformation.
-    
+
     Security considerations:
     - Commands are validated against security policies
     - Dangerous operations require specific resource names
     - Interactive shells via kubectl exec are restricted
-    
+
     Examples:
         kubectl get pods
         kubectl get pods -o json | jq '.items[].metadata.name'
@@ -305,14 +305,14 @@ async def execute_helm(
     ctx: Context | None = None,
 ) -> CommandResult:
     """Execute Helm commands with support for Unix pipes.
-    
+
     Executes Helm commands with proper validation, error handling, and resource limits.
     Supports piping output to standard Unix utilities for filtering and transformation.
-    
+
     Security considerations:
     - Commands are validated against security policies
     - Dangerous operations like delete/uninstall require confirmation
-    
+
     Examples:
         helm list
         helm status my-release
@@ -337,14 +337,14 @@ async def execute_istioctl(
     ctx: Context | None = None,
 ) -> CommandResult:
     """Execute Istio commands with support for Unix pipes.
-    
+
     Executes istioctl commands with proper validation, error handling, and resource limits.
     Supports piping output to standard Unix utilities for filtering and transformation.
-    
+
     Security considerations:
     - Commands are validated against security policies
     - Experimental commands and proxy-config access are restricted
-    
+
     Examples:
         istioctl version
         istioctl analyze
@@ -369,14 +369,14 @@ async def execute_argocd(
     ctx: Context | None = None,
 ) -> CommandResult:
     """Execute ArgoCD commands with support for Unix pipes.
-    
+
     Executes ArgoCD commands with proper validation, error handling, and resource limits.
     Supports piping output to standard Unix utilities for filtering and transformation.
-    
+
     Security considerations:
     - Commands are validated against security policies
     - Destructive operations like app delete and repo removal are restricted
-    
+
     Examples:
         argocd app list
         argocd app get my-app
