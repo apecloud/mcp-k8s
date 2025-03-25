@@ -1,7 +1,5 @@
 """Test fixtures for the K8s MCP Server tests."""
 
-import asyncio
-from typing import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -34,15 +32,21 @@ def mock_execute_command():
 @pytest.fixture
 def mock_get_command_help():
     """Fixture that mocks the get_command_help function."""
+    from k8s_mcp_server.tools import CommandHelpResult
     mock = AsyncMock()
-    mock.return_value = {"help_text": "Mocked help text"}
-    with patch("k8s_mcp_server.cli_executor.get_command_help", mock):
+    mock.return_value = CommandHelpResult(help_text="Mocked help text", status="success")
+    with patch("k8s_mcp_server.server.get_command_help", mock):
         yield mock
 
 
-@pytest.fixture
-def event_loop():
-    """Fixture that yields an event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# No need to import k0s fixtures here - they will be imported directly by the test files
+
+
+# We use the default event_loop fixture provided by pytest-asyncio
+# If we need custom loop handling, we can use pytest_asyncio.event_loop_policy fixture instead
+# @pytest.fixture
+# def event_loop():
+#     """Fixture that yields an event loop for async tests."""
+#     loop = asyncio.get_event_loop_policy().new_event_loop()
+#     yield loop
+#     loop.close()
