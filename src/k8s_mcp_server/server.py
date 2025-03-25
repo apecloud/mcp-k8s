@@ -272,6 +272,20 @@ async def execute_kubectl(
     ctx: Context | None = None,
 ) -> CommandResult:
     """Execute kubectl commands with support for Unix pipes.
+    
+    Executes kubectl commands with proper validation, error handling, and resource limits.
+    Supports piping output to standard Unix utilities for filtering and transformation.
+    
+    Security considerations:
+    - Commands are validated against security policies
+    - Dangerous operations require specific resource names
+    - Interactive shells via kubectl exec are restricted
+    
+    Examples:
+        kubectl get pods
+        kubectl get pods -o json | jq '.items[].metadata.name'
+        kubectl describe pod my-pod
+        kubectl logs my-pod -c my-container
 
     Args:
         command: Complete kubectl command to execute (can include Unix pipes)
@@ -279,7 +293,7 @@ async def execute_kubectl(
         ctx: Optional MCP context for request tracking
 
     Returns:
-        CommandResult containing output and status
+        CommandResult containing output and status with structured error information
     """
     return await _execute_tool_command("kubectl", command, timeout, ctx)
 
@@ -291,6 +305,19 @@ async def execute_helm(
     ctx: Context | None = None,
 ) -> CommandResult:
     """Execute Helm commands with support for Unix pipes.
+    
+    Executes Helm commands with proper validation, error handling, and resource limits.
+    Supports piping output to standard Unix utilities for filtering and transformation.
+    
+    Security considerations:
+    - Commands are validated against security policies
+    - Dangerous operations like delete/uninstall require confirmation
+    
+    Examples:
+        helm list
+        helm status my-release
+        helm get values my-release
+        helm get values my-release -o json | jq '.global'
 
     Args:
         command: Complete Helm command to execute (can include Unix pipes)
@@ -298,7 +325,7 @@ async def execute_helm(
         ctx: Optional MCP context for request tracking
 
     Returns:
-        CommandResult containing output and status
+        CommandResult containing output and status with structured error information
     """
     return await _execute_tool_command("helm", command, timeout, ctx)
 
@@ -310,6 +337,19 @@ async def execute_istioctl(
     ctx: Context | None = None,
 ) -> CommandResult:
     """Execute Istio commands with support for Unix pipes.
+    
+    Executes istioctl commands with proper validation, error handling, and resource limits.
+    Supports piping output to standard Unix utilities for filtering and transformation.
+    
+    Security considerations:
+    - Commands are validated against security policies
+    - Experimental commands and proxy-config access are restricted
+    
+    Examples:
+        istioctl version
+        istioctl analyze
+        istioctl proxy-status
+        istioctl dashboard kiali
 
     Args:
         command: Complete Istio command to execute (can include Unix pipes)
@@ -317,7 +357,7 @@ async def execute_istioctl(
         ctx: Optional MCP context for request tracking
 
     Returns:
-        CommandResult containing output and status
+        CommandResult containing output and status with structured error information
     """
     return await _execute_tool_command("istioctl", command, timeout, ctx)
 
@@ -329,6 +369,19 @@ async def execute_argocd(
     ctx: Context | None = None,
 ) -> CommandResult:
     """Execute ArgoCD commands with support for Unix pipes.
+    
+    Executes ArgoCD commands with proper validation, error handling, and resource limits.
+    Supports piping output to standard Unix utilities for filtering and transformation.
+    
+    Security considerations:
+    - Commands are validated against security policies
+    - Destructive operations like app delete and repo removal are restricted
+    
+    Examples:
+        argocd app list
+        argocd app get my-app
+        argocd cluster list
+        argocd repo list
 
     Args:
         command: Complete ArgoCD command to execute (can include Unix pipes)
@@ -336,6 +389,6 @@ async def execute_argocd(
         ctx: Optional MCP context for request tracking
 
     Returns:
-        CommandResult containing output and status
+        CommandResult containing output and status with structured error information
     """
     return await _execute_tool_command("argocd", command, timeout, ctx)

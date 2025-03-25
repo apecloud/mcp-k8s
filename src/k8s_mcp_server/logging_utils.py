@@ -12,7 +12,7 @@ from k8s_mcp_server.config import LOG_DIR
 
 def configure_root_logger():
     """Configure the root logger for the application.
-    
+
     Sets up logging with a consistent format and handlers for both
     console output and file logging.
     """
@@ -42,10 +42,10 @@ def configure_root_logger():
 
 def get_logger(name):
     """Get a standardized logger with the application prefix.
-    
+
     Args:
         name: The name of the module or component
-        
+
     Returns:
         A logger instance with the application prefix
     """

@@ -72,9 +72,11 @@ ALLOWED_UNIX_COMMANDS = [
     "zip",
     "unzip",
     "xargs",
-    "jq",
-    "yq",  # Added for YAML processing
+    "jq",  # JSON processor
+    "yq",  # YAML processor
     "tee",
+    "column",  # Table formatting
+    "watch",   # Repeat command execution
 ]
 
 # List of allowed Kubernetes CLI tools

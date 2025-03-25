@@ -199,7 +199,7 @@ def validate_command(command: str) -> None:
     """Centralized validation for all commands.
 
     This is the main entry point for command validation.
-    
+
     Args:
         command: The command to validate
 

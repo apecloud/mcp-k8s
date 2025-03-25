@@ -17,6 +17,7 @@ classifiers = [
 dependencies = [
     "mcp",
     "pydantic>=2.0.0",
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +39,8 @@ target-version = ['py313']
 [tool.ruff]
 line-length = 120
 target-version = 'py313'
+
+[tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A"]
 ignore = []
 
