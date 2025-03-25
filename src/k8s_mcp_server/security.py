@@ -169,10 +169,10 @@ def validate_pipe_command(pipe_command: str) -> None:
 
 def validate_command(command: str) -> None:
     """Centralized validation for all commands.
-    
+
     Args:
         command: The command to validate
-        
+
     Raises:
         ValueError: If the command is invalid
     """

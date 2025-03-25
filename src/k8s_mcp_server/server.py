@@ -6,6 +6,7 @@ and documentation.
 """
 
 import asyncio
+import sys
 
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
@@ -76,13 +77,13 @@ async def _execute_tool_command(
     ctx: Context | None
 ) -> CommandResult:
     """Internal implementation for executing tool commands.
-    
+
     Args:
         tool: The CLI tool name (kubectl, istioctl, helm, argocd)
         command: The command to execute
         timeout: Optional timeout in seconds
         ctx: Optional MCP context for request tracking
-        
+
     Returns:
         CommandResult containing output and status
     """
