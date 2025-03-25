@@ -8,7 +8,7 @@ timeouts, and output processing.
 import asyncio
 import logging
 import shlex
-from typing import Dict, List, Optional, TypedDict
+from typing import TypedDict
 
 from k8s_mcp_server.config import DEFAULT_TIMEOUT, K8S_CONTEXT, K8S_NAMESPACE, MAX_OUTPUT_SIZE, SUPPORTED_CLI_TOOLS
 from k8s_mcp_server.tools import (
@@ -51,7 +51,7 @@ class CommandExecutionError(Exception):
 
 
 # Dictionary of potentially dangerous commands for each CLI tool
-DANGEROUS_COMMANDS: Dict[str, List[str]] = {
+DANGEROUS_COMMANDS: dict[str, list[str]] = {
     "kubectl": [
         "kubectl delete",  # Global delete without specific resource
         "kubectl drain",
@@ -75,7 +75,7 @@ DANGEROUS_COMMANDS: Dict[str, List[str]] = {
 }
 
 # Dictionary of safe patterns that override the dangerous commands
-SAFE_PATTERNS: Dict[str, List[str]] = {
+SAFE_PATTERNS: dict[str, list[str]] = {
     "kubectl": [
         "kubectl delete pod",
         "kubectl delete deployment",
@@ -194,8 +194,8 @@ def validate_k8s_command(command: str) -> None:
                         return  # Safe pattern match, allow command
 
                 raise CommandValidationError(
-                    f"This command is restricted for safety reasons. "
-                    f"Please use a more specific form with resource type and name."
+                    "This command is restricted for safety reasons. "
+                    "Please use a more specific form with resource type and name."
                 )
 
 
@@ -255,7 +255,7 @@ def is_auth_error(error_output: str) -> bool:
     return any(pattern.lower() in error_output.lower() for pattern in auth_error_patterns)
 
 
-def get_tool_from_command(command: str) -> Optional[str]:
+def get_tool_from_command(command: str) -> str | None:
     """Extract the CLI tool from a command string.
 
     Args:
@@ -312,7 +312,7 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout)
             logger.debug(f"Command completed with return code: {process.returncode}")
-        except asyncio.TimeoutError as timeout_error:
+        except TimeoutError as timeout_error:
             logger.warning(f"Command timed out after {timeout} seconds: {command}")
             try:
                 process.kill()
@@ -336,7 +336,7 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
             if is_auth_error(stderr_str):
                 cli_tool = get_tool_from_command(command)
                 auth_error_msg = f"Authentication error: {stderr_str}"
-                
+
                 if cli_tool == "kubectl":
                     auth_error_msg += "\nPlease check your kubeconfig."
                 elif cli_tool == "istioctl":
@@ -345,7 +345,7 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
                     auth_error_msg += "\nPlease check your Helm repository configuration."
                 elif cli_tool == "argocd":
                     auth_error_msg += "\nPlease check your ArgoCD login status."
-                
+
                 return CommandResult(status="error", output=auth_error_msg)
 
             return CommandResult(status="error", output=stderr_str or "Command failed with no error output")
@@ -370,7 +370,7 @@ def inject_context_namespace(command: str) -> str:
         return command  # Only apply to kubectl and istioctl
 
     cmd_parts = shlex.split(command)
-    
+
     # Check if we need to add context
     if K8S_CONTEXT and "--context" not in command and not any(p == "--context" for p in cmd_parts):
         cmd_parts.insert(1, f"--context={K8S_CONTEXT}")
@@ -381,14 +381,14 @@ def inject_context_namespace(command: str) -> str:
     is_resource_command = any(cmd in cmd_parts for cmd in resource_commands)
     # Don't add namespace if command explicitly targets all namespaces or specifies a namespace
     skips_namespace = "-A" in cmd_parts or "--all-namespaces" in cmd_parts or "-n" in cmd_parts or "--namespace" in cmd_parts
-    
+
     # Some kubectl operations don't require a namespace (get nodes, get namespaces, etc.)
     non_namespace_resources = ["nodes", "namespaces", "clusterroles", "clusterrolebindings"]
     targets_non_namespace_resource = any(resource in cmd_parts for resource in non_namespace_resources)
-    
+
     if is_resource_command and not skips_namespace and not targets_non_namespace_resource:
         cmd_parts.insert(1, f"--namespace={K8S_NAMESPACE}")
-        
+
     return " ".join(cmd_parts)
 
 

@@ -9,7 +9,7 @@ This module provides utilities for validating and executing commands, including:
 import asyncio
 import logging
 import shlex
-from typing import List, TypedDict
+from typing import TypedDict
 
 from k8s_mcp_server.config import DEFAULT_TIMEOUT, MAX_OUTPUT_SIZE
 
@@ -149,7 +149,7 @@ def is_pipe_command(command: str) -> bool:
     return False
 
 
-def split_pipe_command(pipe_command: str) -> List[str]:
+def split_pipe_command(pipe_command: str) -> list[str]:
     """Split a piped command into individual commands.
 
     Args:
@@ -206,7 +206,7 @@ async def execute_piped_command(pipe_command: str, timeout: int | None = None) -
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout)
             logger.debug(f"Piped command completed with return code: {process.returncode}")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Piped command timed out after {timeout} seconds: {pipe_command}")
             try:
                 process.kill()
