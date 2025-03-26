@@ -8,7 +8,7 @@ rather than setting up a cluster during the tests.
 import os
 import subprocess
 import time
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
 
@@ -20,7 +20,7 @@ from k8s_mcp_server.server import (
 
 
 @pytest.fixture
-def ensure_cluster_running(integration_cluster) -> Generator[None, None, None]:
+def ensure_cluster_running(integration_cluster) -> Generator[None]:
     """Ensures cluster is running (either fixture or existing) and returns context.
 
     Checks if a Kubernetes cluster is available using the provided context.
