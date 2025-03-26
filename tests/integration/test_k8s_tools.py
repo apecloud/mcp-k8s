@@ -19,7 +19,7 @@ from k8s_mcp_server.server import (
 
 
 @pytest.fixture
-def ensure_cluster_running(integration_cluster) -> Generator[str, None, None]: # Use the new fixture name
+def ensure_cluster_running(integration_cluster) -> Generator[str]: # Use the new fixture name
     """Ensures cluster is running (either fixture or existing) and returns context.
 
     Checks if a Kubernetes cluster is available using the provided context.
