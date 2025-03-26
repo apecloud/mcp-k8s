@@ -137,7 +137,7 @@ async def test_tool_command_preprocessing(mock_execute_command, mock_k8s_cli_sta
     await execute_kubectl("get pods")
     called_command = mock_execute_command.call_args[0][0]
     assert called_command.startswith("kubectl")
-    
+
     # Test with existing prefix
     mock_execute_command.reset_mock()
     await execute_kubectl("kubectl get pods")
@@ -146,7 +146,7 @@ async def test_tool_command_preprocessing(mock_execute_command, mock_k8s_cli_sta
 
 def test_server_initialization():
     """Test server startup and prompt registration."""
-    from k8s_mcp_server.server import mcp, SERVER_INFO
+    from k8s_mcp_server.server import SERVER_INFO, mcp
     assert mcp.name == "K8s MCP Server"
     assert mcp.version == SERVER_INFO["version"]
     assert len(mcp.prompts) > 0  # Verify prompts registered
@@ -155,10 +155,10 @@ def test_server_initialization():
 async def test_concurrent_command_execution(mock_execute_command, mock_k8s_cli_status):
     """Test parallel command execution safety."""
     from k8s_mcp_server.server import execute_kubectl
-    
+
     async def run_command():
         return await execute_kubectl("get pods")
-    
+
     # Run 10 concurrent commands
     results = await asyncio.gather(*[run_command() for _ in range(10)])
     assert all(r["status"] == "success" for r in results)
