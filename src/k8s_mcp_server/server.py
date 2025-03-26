@@ -7,6 +7,7 @@ and documentation.
 
 import asyncio
 import sys
+from dataclasses import asdict
 
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
