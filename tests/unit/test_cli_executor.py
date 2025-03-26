@@ -178,9 +178,8 @@ async def test_execute_command_success():
                 result = await execute_command("kubectl get pods")
 
                 assert result["status"] == "success"
-                    assert result["output"] == "Success output"
-                    mock_subprocess.assert_called_once()
-
+                assert result["output"] == "Success output"
+                mock_subprocess.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_execute_command_error():
@@ -199,8 +198,7 @@ async def test_execute_command_error():
                 result = await execute_command("kubectl get pods")
 
                 assert result["status"] == "error"
-                    assert result["output"] == "Error message"
-
+                assert result["output"] == "Error message"
 
 @pytest.mark.asyncio
 async def test_execute_command_auth_error():
@@ -219,9 +217,8 @@ async def test_execute_command_auth_error():
                 result = await execute_command("kubectl get pods")
 
                 assert result["status"] == "error"
-                    assert "Authentication error" in result["output"]
-                    assert "kubeconfig" in result["output"]
-
+                assert "Authentication error" in result["output"]
+                assert "kubeconfig" in result["output"]
 
 @pytest.mark.asyncio
 async def test_execute_command_timeout():
@@ -244,12 +241,11 @@ async def test_execute_command_timeout():
                 result = await execute_command("kubectl get pods", timeout=1)
 
                 # Check error message in result
-                    assert result["status"] == "error"
-                    assert "timed out" in result["output"].lower()
+                assert result["status"] == "error"
+                assert "timed out" in result["output"].lower()
 
-                    # Verify process was killed
-                    process_mock.kill.assert_called_once()
-
+                # Verify process was killed
+                process_mock.kill.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_execute_command_with_pipe():
