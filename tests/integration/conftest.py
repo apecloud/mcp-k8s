@@ -1,22 +1,103 @@
-# File: tests/integration/cluster_fixture.py
+# File: tests/integration/conftest.py
 import os
 import subprocess
+import time
+import uuid
 from collections.abc import Generator
+from contextlib import contextmanager
 
 import pytest
 
 
+class KubernetesClusterManager:
+    """Manager class for Kubernetes cluster operations during tests."""
+    
+    def __init__(self):
+        self.context = os.environ.get("K8S_CONTEXT")
+        self.use_existing = os.environ.get("K8S_MCP_TEST_USE_EXISTING_CLUSTER", "false").lower() == "true"
+        self.skip_cleanup = os.environ.get("K8S_SKIP_CLEANUP", "").lower() == "true"
+        
+    def get_context_args(self):
+        """Get the command line arguments for kubectl context."""
+        return ["--context", self.context] if self.context else []
+        
+    def verify_connection(self):
+        """Verify connection to the Kubernetes cluster."""
+        try:
+            cmd = ["kubectl", "cluster-info"] + self.get_context_args()
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=20)
+            print(f"Cluster connection verified:\n{result.stdout[:200]}...")
+            return True
+        except Exception as e:
+            print(f"Cluster connection failed: {str(e)}")
+            return False
+            
+    def create_namespace(self, name=None):
+        """Create a test namespace with optional name."""
+        if name is None:
+            name = f"k8s-mcp-test-{uuid.uuid4().hex[:8]}"
+            
+        try:
+            cmd = ["kubectl", "create", "namespace", name] + self.get_context_args()
+            subprocess.run(cmd, check=True, capture_output=True, timeout=10)
+            print(f"Created test namespace: {name}")
+            return name
+        except subprocess.CalledProcessError as e:
+            if b"AlreadyExists" in e.stderr:
+                print(f"Namespace {name} already exists, reusing")
+                return name
+            raise
+            
+    def delete_namespace(self, name):
+        """Delete the specified namespace."""
+        if self.skip_cleanup:
+            print(f"Skipping cleanup of namespace {name} as requested")
+            return
+            
+        try:
+            cmd = ["kubectl", "delete", "namespace", name, "--wait=false"] + self.get_context_args()
+            subprocess.run(cmd, check=True, capture_output=True, timeout=10)
+            print(f"Deleted test namespace: {name}")
+        except Exception as e:
+            print(f"Warning: Failed to delete namespace {name}: {str(e)}")
+    
+    @contextmanager
+    def temp_namespace(self):
+        """Context manager for a temporary namespace."""
+        name = self.create_namespace()
+        try:
+            yield name
+        finally:
+            self.delete_namespace(name)
+
+
+@pytest.fixture(scope="session")
+def k8s_cluster():
+    """Fixture that provides a KubernetesClusterManager."""
+    manager = KubernetesClusterManager()
+    
+    # Skip tests if we can't connect to the cluster
+    if not manager.verify_connection():
+        pytest.skip("Cannot connect to Kubernetes cluster")
+        
+    return manager
+
+
+@pytest.fixture
+def k8s_namespace(k8s_cluster):
+    """Fixture that provides a temporary namespace for tests."""
+    with k8s_cluster.temp_namespace() as name:
+        yield name
+
+
 @pytest.fixture(scope="session", name="integration_cluster")
 def integration_cluster_fixture() -> Generator[None]:
-    """Fixture to ensure a K8s cluster is available for integration tests.
-
+    """Legacy fixture for backward compatibility with existing tests.
+    
     Checks the K8S_MCP_TEST_USE_EXISTING_CLUSTER environment variable.
     If 'true', it verifies connection to the cluster configured via KUBECONFIG.
     If 'false' or not set (default), it assumes a cluster is provided externally
     (e.g., by the CI environment like kind-action) and does nothing.
-
-    Setup and teardown of the cluster itself is handled outside this fixture
-    (e.g., by GitHub Actions workflow or manual setup for local testing).
     """
     use_existing = os.environ.get("K8S_MCP_TEST_USE_EXISTING_CLUSTER", "false").lower() == "true"
 
