@@ -1,17 +1,14 @@
-"""Command execution utilities for K8s MCP Server.
+"""Command utilities for K8s MCP Server.
 
-This module provides utilities for validating and executing commands, including:
-- Kubernetes CLI tool commands (kubectl, istioctl, helm, argocd)
-- Basic Unix commands
-- Command pipes (piping output from one command to another)
+This module provides core utilities for validating and working with Kubernetes commands,
+including helper functions for command parsing and validation. It focuses on the command
+structure and validation requirements, not execution logic.
 """
 
-import asyncio
 import shlex
-import time
-from typing import TypedDict
+from dataclasses import dataclass
+from typing import Literal, NotRequired, TypedDict
 
-from k8s_mcp_server.config import DEFAULT_TIMEOUT, MAX_OUTPUT_SIZE
 from k8s_mcp_server.logging_utils import get_logger
 
 # Configure module logger
@@ -76,7 +73,7 @@ ALLOWED_UNIX_COMMANDS = [
     "yq",  # YAML processor
     "tee",
     "column",  # Table formatting
-    "watch",   # Repeat command execution
+    "watch",  # Repeat command execution
 ]
 
 # List of allowed Kubernetes CLI tools
@@ -88,14 +85,33 @@ ALLOWED_K8S_TOOLS = [
 ]
 
 
-class CommandResult(TypedDict, total=False):
-    """Type definition for command execution results."""
+class ErrorDetails(TypedDict, total=False):
+    """Type definition for detailed error information."""
 
-    status: str
+    message: str
+    code: str
+    command: str
+    exit_code: int
+    stderr: str
+
+
+class CommandResult(TypedDict):
+    """Type definition for command execution results following the specification."""
+
+    status: Literal["success", "error"]
     output: str
-    error: dict[str, str] | None
-    exit_code: int | None
-    execution_time: float | None
+    exit_code: NotRequired[int]
+    execution_time: NotRequired[float]
+    error: NotRequired[ErrorDetails]
+
+
+@dataclass
+class CommandHelpResult:
+    """Type definition for command help results."""
+
+    help_text: str
+    status: str = "success"
+    error: ErrorDetails | None = None
 
 
 def is_valid_k8s_tool(command: str) -> bool:
@@ -164,6 +180,9 @@ def split_pipe_command(pipe_command: str) -> list[str]:
     Returns:
         List of individual command strings
     """
+    if not pipe_command:
+        return [""]  # Return a list with an empty string for empty input
+
     commands = []
     current_command = ""
     in_single_quote = False
@@ -186,80 +205,3 @@ def split_pipe_command(pipe_command: str) -> list[str]:
         commands.append(current_command.strip())
 
     return commands
-
-
-async def execute_piped_command(pipe_command: str, timeout: int | None = None) -> CommandResult:
-    """Execute a command that contains pipes.
-
-    Args:
-        pipe_command: The piped command to execute
-        timeout: Optional timeout in seconds (defaults to DEFAULT_TIMEOUT)
-
-    Returns:
-        CommandResult containing output and status
-    """
-    # Set timeout
-    if timeout is None:
-        timeout = DEFAULT_TIMEOUT
-
-    logger.debug(f"Executing piped command: {pipe_command}")
-    start_time = time.time()
-
-    try:
-        # Create subprocess with shell=True to handle pipes
-        process = await asyncio.create_subprocess_shell(pipe_command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-
-        # Wait for the process to complete with timeout
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout)
-            logger.debug(f"Piped command completed with return code: {process.returncode}")
-        except TimeoutError:
-            logger.warning(f"Piped command timed out after {timeout} seconds: {pipe_command}")
-            try:
-                process.kill()
-            except Exception as e:
-                logger.error(f"Error killing process: {e}")
-            execution_time = time.time() - start_time
-            return CommandResult(
-                status="error",
-                output=f"Command timed out after {timeout} seconds",
-                error={"message": f"Command timed out after {timeout} seconds", "code": "TIMEOUT_ERROR"},
-                execution_time=execution_time
-            )
-
-        # Process output
-        stdout_str = stdout.decode("utf-8", errors="replace")
-        stderr_str = stderr.decode("utf-8", errors="replace")
-        execution_time = time.time() - start_time
-
-        # Truncate output if necessary
-        if len(stdout_str) > MAX_OUTPUT_SIZE:
-            logger.info(f"Output truncated from {len(stdout_str)} to {MAX_OUTPUT_SIZE} characters")
-            stdout_str = stdout_str[:MAX_OUTPUT_SIZE] + "\n... (output truncated)"
-
-        if process.returncode != 0:
-            logger.warning(f"Piped command failed with return code {process.returncode}: {pipe_command}")
-            logger.debug(f"Command error output: {stderr_str}")
-            return CommandResult(
-                status="error",
-                output=stderr_str or "Command failed with no error output",
-                error={
-                    "message": stderr_str or "Command failed with no error output",
-                    "code": "EXECUTION_ERROR",
-                    "command": pipe_command,
-                    "exit_code": process.returncode,
-                    "stderr": stderr_str
-                },
-                exit_code=process.returncode,
-                execution_time=execution_time
-            )
-
-        return CommandResult(
-            status="success",
-            output=stdout_str,
-            exit_code=process.returncode,
-            execution_time=execution_time
-        )
-    except Exception as e:
-        logger.error(f"Failed to execute piped command: {str(e)}")
-        return CommandResult(status="error", output=f"Failed to execute command: {str(e)}")
