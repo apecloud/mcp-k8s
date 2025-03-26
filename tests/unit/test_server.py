@@ -148,7 +148,7 @@ async def test_tool_command_preprocessing(mock_execute_command, mock_k8s_cli_sta
 
 def test_server_initialization():
     """Test server startup and prompt registration."""
-    from k8s_mcp_server.config import SERVER_INFO # Import from config
+    from k8s_mcp_server.config import SERVER_INFO  # Import from config
     from k8s_mcp_server.server import mcp
     assert mcp.name == "K8s MCP Server"
     assert mcp.version == SERVER_INFO["version"] # Revert to checking mcp.version directly
