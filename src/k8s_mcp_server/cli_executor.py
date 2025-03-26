@@ -25,7 +25,7 @@ from k8s_mcp_server.tools import (
     CommandHelpResult,
     CommandResult,
     ErrorDetails,  # Make sure this is imported
-    ErrorDetailsNested, # Make sure this is imported
+    ErrorDetailsNested,  # Make sure this is imported
     is_pipe_command,
     split_pipe_command,
 )
