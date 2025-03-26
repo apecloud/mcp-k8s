@@ -5,14 +5,13 @@ providing a standardized interface for kubectl, istioctl, helm, and argocd comma
 and documentation.
 """
 
-import sys
 import asyncio
+import sys
 
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
 from pydantic.fields import FieldInfo
 
-from k8s_mcp_server.__init__ import __version__
 from k8s_mcp_server.cli_executor import (
     CommandExecutionError,
     CommandValidationError,
@@ -20,8 +19,7 @@ from k8s_mcp_server.cli_executor import (
     execute_command,
     get_command_help,
 )
-from k8s_mcp_server.config import (INSTRUCTIONS, SERVER_INFO, SUPPORTED_CLI_TOOLS,
-                                   DEFAULT_TIMEOUT)
+from k8s_mcp_server.config import DEFAULT_TIMEOUT, INSTRUCTIONS, SERVER_INFO, SUPPORTED_CLI_TOOLS
 from k8s_mcp_server.logging_utils import configure_root_logger, get_logger
 from k8s_mcp_server.prompts import register_prompts
 from k8s_mcp_server.tools import CommandHelpResult, CommandResult
