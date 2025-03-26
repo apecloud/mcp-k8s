@@ -40,18 +40,18 @@ def ensure_cluster_running() -> Generator[str]:
     # Check if a specific context was provided
     k8s_context = os.environ.get("K8S_CONTEXT")
     context_args = []
-    
+
     if k8s_context:
         context_args = ["--context", k8s_context]
         print(f"Using specified Kubernetes context: {k8s_context}")
-    
+
     # Try to reach the Kubernetes API
     try:
         # Get current context if not specified
         if not k8s_context:
             result = subprocess.run(
-                ["kubectl", "config", "current-context"], 
-                capture_output=True, 
+                ["kubectl", "config", "current-context"],
+                capture_output=True,
                 text=True,
                 timeout=5
             )
@@ -60,7 +60,7 @@ def ensure_cluster_running() -> Generator[str]:
                 print(f"Using current Kubernetes context: {k8s_context}")
             else:
                 pytest.skip("No Kubernetes context is currently set.")
-        
+
         # Verify cluster connection
         cluster_cmd = ["kubectl", "cluster-info"] + context_args
         result = subprocess.run(cluster_cmd, capture_output=True, timeout=5)
@@ -118,11 +118,11 @@ def test_namespace(ensure_cluster_running) -> Generator[str]:
 
     # Check if cleanup should be skipped
     skip_cleanup = os.environ.get("K8S_SKIP_CLEANUP", "").lower() in ("true", "1", "yes")
-    
+
     if skip_cleanup:
         print(f"Note: Skipping cleanup of namespace '{namespace}' as requested by K8S_SKIP_CLEANUP")
         return
-        
+
     try:
         # Clean up namespace
         print(f"Cleaning up test namespace: {namespace}")
@@ -151,7 +151,7 @@ async def test_kubectl_version(ensure_cluster_running):
 async def test_kubectl_get_pods(ensure_cluster_running, test_namespace):
     """Test that kubectl can list pods in the test namespace."""
     k8s_context = ensure_cluster_running
-    
+
     # First create a test pod
     pod_manifest = f"""
     apiVersion: v1
@@ -202,7 +202,7 @@ async def test_kubectl_help(ensure_cluster_running):
 async def test_helm_version(ensure_cluster_running):
     """Test that helm version command works."""
     k8s_context = ensure_cluster_running
-    
+
     # Skip if helm is not installed
     try:
         subprocess.run(["helm", "version"], capture_output=True, timeout=5)
@@ -220,7 +220,7 @@ async def test_helm_version(ensure_cluster_running):
 async def test_helm_list(ensure_cluster_running):
     """Test that helm list command works."""
     k8s_context = ensure_cluster_running
-    
+
     # Skip if helm is not installed
     try:
         subprocess.run(["helm", "version"], capture_output=True, timeout=5)

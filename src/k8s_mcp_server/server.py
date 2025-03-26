@@ -13,8 +13,6 @@ from pydantic import Field
 
 from k8s_mcp_server.cli_executor import (
     CommandExecutionError,
-    CommandHelpResult,
-    CommandResult,
     CommandValidationError,
     check_cli_installed,
     execute_command,
@@ -23,6 +21,7 @@ from k8s_mcp_server.cli_executor import (
 from k8s_mcp_server.config import INSTRUCTIONS, SERVER_INFO, SUPPORTED_CLI_TOOLS
 from k8s_mcp_server.logging_utils import configure_root_logger, get_logger
 from k8s_mcp_server.prompts import register_prompts
+from k8s_mcp_server.tools import CommandHelpResult, CommandResult
 
 # Configure logging
 configure_root_logger()
@@ -70,12 +69,7 @@ mcp = FastMCP(
 register_prompts(mcp)
 
 
-async def _execute_tool_command(
-    tool: str,
-    command: str,
-    timeout: int | None,
-    ctx: Context | None
-) -> CommandResult:
+async def _execute_tool_command(tool: str, command: str, timeout: int | None, ctx: Context | None) -> CommandResult:
     """Internal implementation for executing tool commands.
 
     Args:
