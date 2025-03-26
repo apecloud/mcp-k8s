@@ -85,14 +85,18 @@ ALLOWED_K8S_TOOLS = [
 ]
 
 
-class ErrorDetails(TypedDict, total=False):
-    """Type definition for detailed error information."""
-
-    message: str
-    code: str
+class ErrorDetailsNested(TypedDict, total=False):
+    """Type definition for nested error details."""
     command: str
     exit_code: int
     stderr: str
+
+
+class ErrorDetails(TypedDict, total=False):
+    """Type definition for detailed error information matching the spec."""
+    message: str
+    code: str
+    details: ErrorDetailsNested # Use the nested type here
 
 
 class CommandResult(TypedDict):
