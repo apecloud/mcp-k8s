@@ -20,14 +20,15 @@ from k8s_mcp_server.server import (
 
 @pytest.fixture
 def ensure_cluster_running(integration_cluster) -> Generator[str, None, None]: # Use the new fixture name
-    """Ensures cluster is running (either fixture or existing) and returns context."""
-    # Check if a Kubernetes cluster is available using the provided context.
+    """Ensures cluster is running (either fixture or existing) and returns context.
 
-    # This fixture:
-    1. Uses the K8S_CONTEXT environment variable (if set) to select a specific K8s context
-    2. Verifies the cluster connection is working
-    3. Yields the current context name on success
-    4. Skip tests if no context can be found or connected to
+    Checks if a Kubernetes cluster is available using the provided context.
+
+    This fixture:
+    1. Uses the K8S_CONTEXT environment variable (if set) to select a specific K8s context.
+    2. Verifies the cluster connection is working.
+    3. Yields the current context name on success.
+    4. Skips tests if no context can be found or connected to.
 
     For local development, you can use:
     - k3s: https://k3s.io/ (lightweight single-node K8s)
@@ -36,7 +37,7 @@ def ensure_cluster_running(integration_cluster) -> Generator[str, None, None]: #
     - kind: https://kind.sigs.k8s.io/docs/user/quick-start/
 
     Returns:
-        Current context name if cluster is running, raises skip exception otherwise
+        Current context name if cluster is running, raises skip exception otherwise.
     """
     # Check if a specific context was provided
     k8s_context = os.environ.get("K8S_CONTEXT")
@@ -84,18 +85,18 @@ def test_namespace(ensure_cluster_running) -> Generator[str]:
     """Create a test namespace and clean it up after tests.
 
     This fixture:
-    1. Creates a dedicated test namespace
-    2. Yields the namespace name for tests to use
-    3. Cleans up the namespace after tests complete (unless K8S_SKIP_CLEANUP=true)
+    1. Creates a dedicated test namespace.
+    2. Yields the namespace name for tests to use.
+    3. Cleans up the namespace after tests complete (unless K8S_SKIP_CLEANUP=true).
 
     Args:
-        ensure_cluster_running: Fixture that provides current K8s context
+        ensure_cluster_running: Fixture that provides current K8s context.
 
     Environment Variables:
-        K8S_SKIP_CLEANUP: If set to 'true', skip namespace cleanup after tests
+        K8S_SKIP_CLEANUP: If set to 'true', skip namespace cleanup after tests.
 
     Returns:
-        The name of the test namespace
+        The name of the test namespace.
     """
     k8s_context = ensure_cluster_running
     namespace = f"k8s-mcp-test-{os.getpid()}"  # Make namespace unique per test run
@@ -154,7 +155,7 @@ async def test_kubectl_get_pods(ensure_cluster_running, test_namespace):
     k8s_context = ensure_cluster_running
 
     # First create a test pod
-    pod_manifest = f"""
+    pod_manifest = f"""\
     apiVersion: v1
     kind: Pod
     metadata:
@@ -164,7 +165,7 @@ async def test_kubectl_get_pods(ensure_cluster_running, test_namespace):
       containers:
       - name: nginx
         image: nginx:alpine
-    """
+"""
 
     with open("/tmp/test-pod.yaml", "w") as f:
         f.write(pod_manifest)
@@ -194,7 +195,7 @@ async def test_kubectl_help(ensure_cluster_running):
     """Test that kubectl help command works."""
     result = await describe_kubectl(command="get")
 
-    assert "help_text" in result
+    assert hasattr(result, "help_text") # Check attribute existence for dataclass
     assert "Display one or many resources" in result["help_text"]
 
 
