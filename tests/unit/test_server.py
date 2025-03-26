@@ -150,32 +150,39 @@ def test_server_initialization():
     """Test server startup and prompt registration."""
     from k8s_mcp_server.server import SERVER_INFO, mcp
     assert mcp.name == "K8s MCP Server"
-    assert mcp.server_info["version"] == SERVER_INFO["version"]
+    assert mcp.info["version"] == SERVER_INFO["version"] # Try accessing via mcp.info
     assert len(mcp.prompts) > 0  # Verify prompts registered
 
 @pytest.mark.asyncio
-async def test_concurrent_command_execution(mock_execute_command, mock_k8s_cli_status):
+async def test_concurrent_command_execution(mock_k8s_cli_status):
     """Test parallel command execution safety."""
     from k8s_mcp_server.server import execute_kubectl
 
-    mock_execute_command.return_value = {"status": "success", "output": "test"}
+    # Patch execute_command within the server module's scope
+    with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = {"status": "success", "output": "test"}
 
-    async def run_command():
-        return await execute_kubectl("get pods")
+        async def run_command():
+            return await execute_kubectl("get pods")
 
-    # Run 10 concurrent commands
-    results = await asyncio.gather(*[run_command() for _ in range(10)])
-    assert all(r["status"] == "success" for r in results)
+        # Run 10 concurrent commands
+        results = await asyncio.gather(*[run_command() for _ in range(10)])
+        assert all(r["status"] == "success" for r in results)
+        assert mock_exec.call_count == 10
 
 @pytest.mark.asyncio
-async def test_long_running_command(mock_execute_command, mock_k8s_cli_status):
+async def test_long_running_command(mock_k8s_cli_status):
     """Test timeout handling for near-limit executions."""
-    mock_execute_command.return_value = {
-        "status": "error",
-        "output": "Command timed out after 0.1 seconds"
-    }
-    result = await execute_kubectl("get pods", timeout=0.1)
-    assert "timed out" in result["output"].lower()
+    # Patch execute_command within the server module's scope
+    with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = {
+            "status": "error",
+            "output": "Command timed out after 0.1 seconds"
+        }
+        result = await execute_kubectl("get pods", timeout=0.1)
+        assert "timed out" in result["output"].lower()
+        # Check that the timeout value was passed correctly to the patched function
+        mock_exec.assert_called_once_with("kubectl get pods", timeout=0.1)
 
 @pytest.mark.asyncio
 async def test_execute_kubectl_with_unexpected_error(mock_k8s_cli_status):
