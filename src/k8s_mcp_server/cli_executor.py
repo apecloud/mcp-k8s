@@ -21,7 +21,14 @@ from k8s_mcp_server.config import (
 )
 from k8s_mcp_server.logging_utils import get_logger
 from k8s_mcp_server.security import validate_command
-from k8s_mcp_server.tools import CommandHelpResult, CommandResult, is_pipe_command, split_pipe_command
+from k8s_mcp_server.tools import (
+    CommandHelpResult,
+    CommandResult,
+    ErrorDetails,  # Make sure this is imported
+    ErrorDetailsNested, # Make sure this is imported
+    is_pipe_command,
+    split_pipe_command,
+)
 
 # Configure module logger
 logger = get_logger("cli_executor")
@@ -192,14 +199,16 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
                 logger.error(f"Error killing process: {e}")
 
             execution_time = time.time() - start_time
+            error_message = f"Command timed out after {timeout} seconds"
+            error_details = ErrorDetails(
+                message=error_message,
+                code="TIMEOUT_ERROR",
+                details=ErrorDetailsNested(command=command)
+            )
             return CommandResult(
                 status="error",
-                output=f"Command timed out after {timeout} seconds",
-                error={
-                    "message": f"Command timed out after {timeout} seconds",
-                    "code": "TIMEOUT_ERROR",
-                    "command": command,
-                },
+                output=error_message,
+                error=error_details,
                 execution_time=execution_time,
             )
 
@@ -237,17 +246,19 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
 
                 error_message = auth_error_msg
 
-            error_details = {
-                "message": error_message,
-                "code": error_code,
-                "command": command,
-                "exit_code": process.returncode,
-                "stderr": stderr_str,
-            }
+            error_details = ErrorDetails(
+                message=error_message,
+                code=error_code,
+                details=ErrorDetailsNested(
+                    command=command,
+                    exit_code=process.returncode,
+                    stderr=stderr_str,
+                )
+            )
 
             return CommandResult(
                 status="error",
-                output=error_message,
+                output=error_message, # Use the potentially enhanced error_message
                 error=error_details,
                 exit_code=process.returncode,
                 execution_time=execution_time,
@@ -260,15 +271,22 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
         raise
     except Exception as e:
         logger.error(f"Failed to execute command: {str(e)}")
+        error_message = f"Failed to execute command: {str(e)}"
+        error_details = ErrorDetails(
+            message=error_message,
+            code="INTERNAL_ERROR",
+            details=ErrorDetailsNested(command=command)
+        )
         return CommandResult(
             status="error",
-            output=f"Failed to execute command: {str(e)}",
-            error={"message": f"Failed to execute command: {str(e)}", "code": "INTERNAL_ERROR", "command": command},
+            output=error_message,
+            error=error_details,
         )
 
 
 def inject_context_namespace(command: str) -> str:
-    """Inject context and namespace flags into kubectl and istioctl commands if not already present.
+    """Inject context and namespace flags into kubectl and istioctl commands if not already present,
+    respecting flags already in the command.
 
     Args:
         command: The CLI command
@@ -279,45 +297,101 @@ def inject_context_namespace(command: str) -> str:
     if not (command.startswith("kubectl") or command.startswith("istioctl")):
         return command  # Only apply to kubectl and istioctl
 
-    cmd_parts = shlex.split(command)
-    new_cmd_parts = [cmd_parts[0]]  # Start with the command name
+    try:
+        cmd_parts = shlex.split(command)
+    except ValueError:
+        # Handle potential parsing errors, e.g., unmatched quotes
+        logger.warning(f"Could not parse command for context/namespace injection: {command}")
+        return command
 
-    flags = []  # Store all flags for consistent ordering
-    args = []   # Store non-flag arguments
+    if not cmd_parts:
+        return command
 
-    # First collect all existing parts
-    for part in cmd_parts[1:]:
-        if part.startswith("--") or part.startswith("-"):
+    tool_name = cmd_parts[0]
+    flags = []
+    args = []
+    has_context_flag = False
+    has_namespace_flag = False
+    targets_all_namespaces = False
+
+    # Parse existing flags and arguments
+    i = 1
+    while i < len(cmd_parts):
+        part = cmd_parts[i]
+        if part.startswith("--"):
             flags.append(part)
+            if part.startswith("--context"): # Handles --context and --context=...
+                has_context_flag = True
+            elif part.startswith("--namespace"): # Handles --namespace and --namespace=...
+                has_namespace_flag = True
+            elif part == "--all-namespaces":
+                targets_all_namespaces = True
+        elif part.startswith("-"):
+            # Handle combined short flags like -itn or separate flags like -i -t -n
+            flags.append(part)
+            if 'n' in part[1:]: # Check if -n is present, potentially combined
+                # Need to be careful: -name is not -n, but shlex should split correctly usually
+                # A simple check might be sufficient for common cases
+                if part == "-n":
+                     has_namespace_flag = True
+                # More robust check for combined flags like '-itn' requires iterating chars
+                elif len(part) > 1 and part[0] == '-' and part[1] != '-': # Avoid '--'
+                    if 'n' in part[1:]:
+                        # Check if 'n' is followed by a value in the next part
+                        is_n_flag_with_value = (
+                            'n' == part[-1] and (i + 1) < len(cmd_parts) and not cmd_parts[i+1].startswith('-')
+                        )
+                        if not is_n_flag_with_value:
+                            has_namespace_flag = True # Assume -n flag if not expecting value
+
+            if part == "-A":
+                targets_all_namespaces = True
         else:
+            # Treat as argument
             args.append(part)
+        i += 1
 
-    # Check if we need to add context flag (always add first)
-    if K8S_CONTEXT and "--context" not in command and not any(p.startswith("--context=") for p in flags):
+
+    # --- Inject Context ---
+    if K8S_CONTEXT and not has_context_flag:
+        # Insert context flag early, common convention
         flags.insert(0, f"--context={K8S_CONTEXT}")
+        logger.debug(f"Injected context: --context={K8S_CONTEXT}")
 
-    # Check if we need to add namespace flag
-    resource_commands = ["get", "describe", "delete", "edit", "label", "annotate", "patch", "apply", "logs"]
-    is_resource_command = any(cmd in args for cmd in resource_commands)
+    # --- Inject Namespace ---
+    # Check if namespace injection is applicable
+    resource_commands = ["get", "describe", "delete", "edit", "label", "annotate", "patch", "apply", "logs", "exec", "rollout", "scale", "autoscale", "expose"]
+    # Check if any arg is a resource command (simple check)
+    is_resource_command = any(arg in resource_commands for arg in args)
 
-    # Don't add namespace if command explicitly targets all namespaces or specifies a namespace
-    skip_namespace_flags = ["-A", "--all-namespaces", "-n"]
-    skip_namespace_prefixes = ["--namespace="]
+    # Some commands operate cluster-wide or don't need a namespace
+    non_namespace_resources = ["nodes", "namespaces", "pv", "persistentvolumes", "storageclasses", "clusterroles", "clusterrolebindings", "apiservices", "certificatesigningrequests"]
+    targets_non_namespace_resource = any(arg in non_namespace_resources for arg in args)
 
-    skips_namespace = (
-        any(flag in flags for flag in skip_namespace_flags) or
-        any(flag.startswith(prefix) for flag in flags for prefix in skip_namespace_prefixes)
-    )
+    # Check if the command itself implies cluster scope (e.g., api-resources)
+    is_cluster_scoped_command = any(arg in ["api-resources", "api-versions", "cluster-info"] for arg in args)
 
-    # Some kubectl operations don't require a namespace (get nodes, get namespaces, etc.)
-    non_namespace_resources = ["nodes", "namespaces", "clusterroles", "clusterrolebindings"]
-    targets_non_namespace_resource = any(resource in args for resource in non_namespace_resources)
 
-    if is_resource_command and not skips_namespace and not targets_non_namespace_resource:
+    if (K8S_NAMESPACE and
+            not has_namespace_flag and
+            not targets_all_namespaces and
+            is_resource_command and
+            not targets_non_namespace_resource and
+            not is_cluster_scoped_command):
+        # Add namespace flag
         flags.append(f"--namespace={K8S_NAMESPACE}")
+        logger.debug(f"Injected namespace: --namespace={K8S_NAMESPACE}")
 
-    # Reconstruct command with consistent ordering: command, flags, args
-    return " ".join([new_cmd_parts[0]] + flags + args)
+    # Reconstruct command: tool_name + flags + args
+    # Use shlex.join for potentially safer reconstruction if available (Python 3.8+)
+    # Otherwise, simple join is usually sufficient if parsing was okay.
+    try:
+        # Python 3.8+
+        from shlex import join as shlex_join
+        return shlex_join([tool_name] + flags + args)
+    except ImportError:
+        # Fallback for older Python versions
+        return " ".join([tool_name] + flags + args)
 
 
 async def get_command_help(cli_tool: str, command: str | None = None) -> CommandHelpResult:
