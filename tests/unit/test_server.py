@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from k8s_mcp_server import __version__ # Import version directly
+from k8s_mcp_server import __version__  # Import version directly
 from k8s_mcp_server.cli_executor import CommandExecutionError, CommandValidationError
 from k8s_mcp_server.server import describe_kubectl, execute_kubectl
 
