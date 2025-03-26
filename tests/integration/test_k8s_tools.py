@@ -7,7 +7,8 @@ rather than setting up a cluster during the tests.
 
 import os
 import subprocess
-from collections.abc import Generator
+import time
+from typing import Generator
 
 import pytest
 
@@ -19,7 +20,7 @@ from k8s_mcp_server.server import (
 
 
 @pytest.fixture
-def ensure_cluster_running(integration_cluster) -> Generator[str]: # Use the new fixture name
+def ensure_cluster_running(integration_cluster) -> Generator[None, None, None]:
     """Ensures cluster is running (either fixture or existing) and returns context.
 
     Checks if a Kubernetes cluster is available using the provided context.
@@ -99,7 +100,7 @@ def test_namespace(ensure_cluster_running) -> Generator[str]:
         The name of the test namespace.
     """
     k8s_context = ensure_cluster_running
-    namespace = f"k8s-mcp-test-{os.getpid()}"  # Make namespace unique per test run
+    namespace = f"k8s-mcp-test-{os.getpid()}-{int(time.time())}"  # Make namespace unique per test run
     context_args = ["--context", k8s_context] if k8s_context else []
 
     try:
