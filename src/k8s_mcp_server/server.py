@@ -60,9 +60,9 @@ cli_status = run_startup_checks()
 
 # Create the FastMCP server following FastMCP best practices
 mcp = FastMCP(
-    "K8s MCP Server",
+    name="K8s MCP Server",
     instructions=INSTRUCTIONS,
-    version=SERVER_INFO["version"],
+    server_info=SERVER_INFO,
 )
 
 # Register prompt templates

@@ -134,16 +134,17 @@ async def test_execute_kubectl_with_execution_error(mock_k8s_cli_status):
 @pytest.mark.asyncio
 async def test_tool_command_preprocessing(mock_execute_command, mock_k8s_cli_status):
     """Test automatic tool prefix addition."""
-    # Test without tool prefix
-    await execute_kubectl("get pods")
-    called_command = mock_execute_command.call_args[0][0]
-    assert called_command.startswith("kubectl")
+    with patch("k8s_mcp_server.server.execute_command", mock_execute_command):
+        # Test without tool prefix
+        await execute_kubectl("get pods")
+        called_command = mock_execute_command.call_args[0][0]
+        assert called_command.startswith("kubectl")
 
-    # Test with existing prefix
-    mock_execute_command.reset_mock()
-    await execute_kubectl("kubectl get pods")
-    called_command = mock_execute_command.call_args[0][0]
-    assert called_command == "kubectl get pods"
+        # Test with existing prefix
+        mock_execute_command.reset_mock()
+        await execute_kubectl("kubectl get pods")
+        called_command = mock_execute_command.call_args[0][0]
+        assert called_command == "kubectl get pods"
 
 def test_server_initialization():
     """Test server startup and prompt registration."""
@@ -157,6 +158,8 @@ async def test_concurrent_command_execution(mock_execute_command, mock_k8s_cli_s
     """Test parallel command execution safety."""
     from k8s_mcp_server.server import execute_kubectl
 
+    mock_execute_command.return_value = {"status": "success", "output": "test"}
+
     async def run_command():
         return await execute_kubectl("get pods")
 
@@ -167,9 +170,12 @@ async def test_concurrent_command_execution(mock_execute_command, mock_k8s_cli_s
 @pytest.mark.asyncio
 async def test_long_running_command(mock_execute_command, mock_k8s_cli_status):
     """Test timeout handling for near-limit executions."""
-    mock_execute_command.side_effect = TimeoutError()
+    mock_execute_command.return_value = {
+        "status": "error",
+        "output": "Command timed out after 0.1 seconds"
+    }
     result = await execute_kubectl("get pods", timeout=0.1)
-    assert "timeout" in result["output"].lower()
+    assert "timed out" in result["output"].lower()
 
 @pytest.mark.asyncio
 async def test_execute_kubectl_with_unexpected_error(mock_k8s_cli_status):

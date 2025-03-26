@@ -289,7 +289,8 @@ async def test_execute_command_with_pipe():
 async def test_execute_command_output_truncation():
     """Test output truncation when exceeding MAX_OUTPUT_SIZE."""
     large_output = "a" * 150000  # 150KB
-    with patch('asyncio.create_subprocess_shell') as mock_subprocess:
+    with patch('asyncio.create_subprocess_shell') as mock_subprocess, \
+         patch("k8s_mcp_server.cli_executor.set_resource_limits"):
         process_mock = AsyncMock()
         process_mock.returncode = 0
         process_mock.communicate.return_value = (large_output.encode(), b"")
@@ -304,7 +305,8 @@ async def test_execute_command_output_truncation():
 async def test_execute_command_resource_limits():
     """Test memory limit enforcement."""
     with patch('resource.setrlimit') as mock_setrlimit, \
-         patch('asyncio.create_subprocess_shell') as mock_subprocess:
+         patch('asyncio.create_subprocess_shell') as mock_subprocess, \
+         patch("k8s_mcp_server.cli_executor.validate_command"):
         # Configure process mock
         process_mock = AsyncMock()
         process_mock.communicate.side_effect = MemoryError()

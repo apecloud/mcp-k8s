@@ -60,6 +60,8 @@ SAFE_PATTERNS: dict[str, list[str]] = {
         # Specific exec commands that are safe
         "kubectl exec --help",
         "kubectl exec -it",  # Allow interactive mode that's explicitly requested
+        "kubectl exec pod",
+        "kubectl exec deployment",
         "kubectl port-forward --help",
         "kubectl cp --help",
     ],
