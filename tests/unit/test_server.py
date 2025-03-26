@@ -167,7 +167,7 @@ async def test_concurrent_command_execution(mock_execute_command, mock_k8s_cli_s
 @pytest.mark.asyncio
 async def test_long_running_command(mock_execute_command, mock_k8s_cli_status):
     """Test timeout handling for near-limit executions."""
-    mock_execute_command.side_effect = asyncio.TimeoutError()
+    mock_execute_command.side_effect = TimeoutError()
     result = await execute_kubectl("get pods", timeout=0.1)
     assert "timeout" in result["output"].lower()
 
