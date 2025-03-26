@@ -286,6 +286,50 @@ async def test_execute_command_with_pipe():
 
 
 @pytest.mark.asyncio
+async def test_execute_command_output_truncation():
+    """Test output truncation when exceeding MAX_OUTPUT_SIZE."""
+    large_output = "a" * 150000  # 150KB
+    with patch('asyncio.create_subprocess_shell') as mock_subprocess:
+        process_mock = AsyncMock()
+        process_mock.returncode = 0
+        process_mock.communicate.return_value = (large_output.encode(), b"")
+        mock_subprocess.return_value = process_mock
+
+        with patch("k8s_mcp_server.cli_executor.MAX_OUTPUT_SIZE", 100000):
+            result = await execute_command("kubectl get pods")
+            assert "truncated" in result["output"]
+            assert len(result["output"]) <= 100000 + len("\n... (output truncated)")
+
+@pytest.mark.asyncio
+async def test_execute_command_resource_limits():
+    """Test memory limit enforcement."""
+    with patch('resource.setrlimit') as mock_setrlimit, \
+         patch('asyncio.create_subprocess_shell') as mock_subprocess:
+        # Configure process mock
+        process_mock = AsyncMock()
+        process_mock.communicate.side_effect = MemoryError()
+        mock_subprocess.return_value = process_mock
+
+        result = await execute_command("kubectl get pods")
+        assert "memory" in result["output"].lower()
+        mock_setrlimit.assert_called()
+
+@pytest.mark.parametrize("command, expected", [
+    ("kubectl exec pod -- ls", True),
+    ("kubectl exec pod -- /bin/bash", True),  # Should still be allowed
+    ("kubectl delete", False),
+    ("helm uninstall", False),
+])
+def test_security_validation(command, expected):
+    """Test security validation edge cases."""
+    from k8s_mcp_server.security import validate_command
+    if expected:
+        validate_command(command)
+    else:
+        with pytest.raises(ValueError):
+            validate_command(command)
+
+@pytest.mark.asyncio
 async def test_get_command_help():
     """Test getting command help."""
     # Mock execute_command to return a successful result
