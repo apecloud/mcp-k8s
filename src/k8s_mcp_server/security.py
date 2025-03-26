@@ -6,9 +6,11 @@ and pipe command validation.
 """
 
 import shlex
+from dataclasses import dataclass
 
 from k8s_mcp_server.logging_utils import get_logger
 from k8s_mcp_server.tools import (
+    ALLOWED_K8S_TOOLS,
     is_pipe_command,
     is_valid_k8s_tool,
     split_pipe_command,
@@ -82,6 +84,15 @@ SAFE_PATTERNS: dict[str, list[str]] = {
 }
 
 
+@dataclass
+class ValidationRule:
+    """Represents a command validation rule."""
+
+    pattern: str
+    description: str
+    error_message: str
+
+
 def is_safe_exec_command(command: str) -> bool:
     """Check if a kubectl exec command is safe to execute.
 
@@ -102,6 +113,12 @@ def is_safe_exec_command(command: str) -> bool:
 
     # Check for shell commands that might be used without proper args
     dangerous_shell_patterns = [" -- sh", " -- bash", " -- /bin/sh", " -- /bin/bash"]
+
+    # If the shell command is followed by arguments (like -c 'command'), it's safe
+    if " -- /bin/bash -c " in command or " -- bash -c " in command or " -- sh -c " in command:
+        return True
+
+    # Check for dangerous shells with no args
     has_dangerous_shell = any(pattern in command + " " for pattern in dangerous_shell_patterns)
 
     # If interactive is explicitly requested AND not trying to just get a shell, it's safe
@@ -110,7 +127,7 @@ def is_safe_exec_command(command: str) -> bool:
 
 
 def validate_k8s_command(command: str) -> None:
-    """Validate that the command is a proper Kubernetes CLI command.
+    """Validate that the command is a proper Kubernetes CLI tool command.
 
     Args:
         command: The Kubernetes CLI command to validate
@@ -126,9 +143,7 @@ def validate_k8s_command(command: str) -> None:
 
     cli_tool = cmd_parts[0]
     if not is_valid_k8s_tool(cli_tool):
-        raise ValueError(
-            "Command must start with a supported CLI tool: kubectl, istioctl, helm, argocd"
-        )
+        raise ValueError(f"Command must start with a supported CLI tool: {', '.join(ALLOWED_K8S_TOOLS)}")
 
     if len(cmd_parts) < 2:
         raise ValueError(f"Command must include a {cli_tool} action")
