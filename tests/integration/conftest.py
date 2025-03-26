@@ -6,8 +6,8 @@ from collections.abc import Generator
 import pytest
 
 
-@pytest.fixture(scope="session")
-def integration_cluster() -> Generator[None]:
+@pytest.fixture(scope="session", name="integration_cluster")
+def integration_cluster_fixture() -> Generator[None]:
     """Fixture to ensure a K8s cluster is available for integration tests.
 
     Checks the K8S_MCP_TEST_USE_EXISTING_CLUSTER environment variable.
