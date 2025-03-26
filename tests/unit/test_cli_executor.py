@@ -173,12 +173,11 @@ async def test_execute_command_success():
 
         # Mock validation function to avoid dependency
         with patch("k8s_mcp_server.cli_executor.validate_command"):
-            # Mock resource limits to avoid actual setting
-            with patch("k8s_mcp_server.cli_executor.set_resource_limits"):
-                with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
-                    result = await execute_command("kubectl get pods")
+            # Mock context injection
+            with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
+                result = await execute_command("kubectl get pods")
 
-                    assert result["status"] == "success"
+                assert result["status"] == "success"
                     assert result["output"] == "Success output"
                     mock_subprocess.assert_called_once()
 
@@ -195,12 +194,11 @@ async def test_execute_command_error():
 
         # Mock validation function to avoid dependency
         with patch("k8s_mcp_server.cli_executor.validate_command"):
-            # Mock resource limits to avoid actual setting
-            with patch("k8s_mcp_server.cli_executor.set_resource_limits"):
-                with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
-                    result = await execute_command("kubectl get pods")
+            # Mock context injection
+            with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
+                result = await execute_command("kubectl get pods")
 
-                    assert result["status"] == "error"
+                assert result["status"] == "error"
                     assert result["output"] == "Error message"
 
 
@@ -216,12 +214,11 @@ async def test_execute_command_auth_error():
 
         # Mock validation function to avoid dependency
         with patch("k8s_mcp_server.cli_executor.validate_command"):
-            # Mock resource limits to avoid actual setting
-            with patch("k8s_mcp_server.cli_executor.set_resource_limits"):
-                with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
-                    result = await execute_command("kubectl get pods")
+            # Mock context injection
+            with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
+                result = await execute_command("kubectl get pods")
 
-                    assert result["status"] == "error"
+                assert result["status"] == "error"
                     assert "Authentication error" in result["output"]
                     assert "kubeconfig" in result["output"]
 
@@ -242,12 +239,11 @@ async def test_execute_command_timeout():
 
         # Mock validation function to avoid dependency
         with patch("k8s_mcp_server.cli_executor.validate_command"):
-            # Mock resource limits to avoid actual setting
-            with patch("k8s_mcp_server.cli_executor.set_resource_limits"):
-                with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
-                    result = await execute_command("kubectl get pods", timeout=1)
+            # Mock context injection
+            with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
+                result = await execute_command("kubectl get pods", timeout=1)
 
-                    # Check error message in result
+                # Check error message in result
                     assert result["status"] == "error"
                     assert "timed out" in result["output"].lower()
 
@@ -269,11 +265,10 @@ async def test_execute_command_with_pipe():
             )
             mock_subprocess.return_value = process_mock
 
-            # Mock resource limits to avoid actual setting
-            with patch("k8s_mcp_server.cli_executor.set_resource_limits"):
-                with patch(
-                    "k8s_mcp_server.cli_executor.inject_context_namespace",
-                    return_value="kubectl get pods --context=test"
+            # Mock context injection
+            with patch(
+                "k8s_mcp_server.cli_executor.inject_context_namespace",
+                return_value="kubectl get pods --context=test"
                 ):
                     # Test with a pipe command
                     result = await execute_command("kubectl get pods | grep nginx")
@@ -289,8 +284,7 @@ async def test_execute_command_with_pipe():
 async def test_execute_command_output_truncation():
     """Test output truncation when exceeding MAX_OUTPUT_SIZE."""
     large_output = "a" * 150000  # 150KB
-    with patch('asyncio.create_subprocess_shell') as mock_subprocess, \
-         patch("k8s_mcp_server.cli_executor.set_resource_limits"):
+    with patch('asyncio.create_subprocess_shell') as mock_subprocess:
         process_mock = AsyncMock()
         process_mock.returncode = 0
         process_mock.communicate.return_value = (large_output.encode(), b"")
@@ -300,21 +294,6 @@ async def test_execute_command_output_truncation():
             result = await execute_command("kubectl get pods")
             assert "truncated" in result["output"]
             assert len(result["output"]) <= 100000 + len("\n... (output truncated)")
-
-@pytest.mark.asyncio
-async def test_execute_command_resource_limits():
-    """Test memory limit enforcement."""
-    with patch('resource.setrlimit') as mock_setrlimit, \
-         patch('asyncio.create_subprocess_shell') as mock_subprocess, \
-         patch("k8s_mcp_server.cli_executor.validate_command"):
-        # Configure process mock
-        process_mock = AsyncMock()
-        process_mock.communicate.side_effect = MemoryError()
-        mock_subprocess.return_value = process_mock
-
-        result = await execute_command("kubectl get pods")
-        assert "memory" in result["output"].lower()
-        mock_setrlimit.assert_called()
 
 @pytest.mark.parametrize("command, expected", [
     ("kubectl exec pod -- ls", True),

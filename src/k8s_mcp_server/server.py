@@ -5,12 +5,14 @@ providing a standardized interface for kubectl, istioctl, helm, and argocd comma
 and documentation.
 """
 
-import asyncio
 import sys
+import asyncio
 
 from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
+from pydantic.fields import FieldInfo
 
+from k8s_mcp_server.__init__ import __version__
 from k8s_mcp_server.cli_executor import (
     CommandExecutionError,
     CommandValidationError,
@@ -18,7 +20,8 @@ from k8s_mcp_server.cli_executor import (
     execute_command,
     get_command_help,
 )
-from k8s_mcp_server.config import INSTRUCTIONS, SERVER_INFO, SUPPORTED_CLI_TOOLS
+from k8s_mcp_server.config import (INSTRUCTIONS, SERVER_INFO, SUPPORTED_CLI_TOOLS,
+                                   DEFAULT_TIMEOUT)
 from k8s_mcp_server.logging_utils import configure_root_logger, get_logger
 from k8s_mcp_server.prompts import register_prompts
 from k8s_mcp_server.tools import CommandHelpResult, CommandResult
@@ -90,6 +93,11 @@ async def _execute_tool_command(tool: str, command: str, timeout: int | None, ct
             await ctx.error(message)
         return CommandResult(status="error", output=message)
 
+    # Handle Pydantic Field default for timeout
+    actual_timeout = timeout
+    if isinstance(timeout, FieldInfo) or timeout is None:
+        actual_timeout = DEFAULT_TIMEOUT
+
     # Add tool prefix if not present
     if not command.strip().startswith(tool):
         command = f"{tool} {command}"
@@ -97,10 +105,10 @@ async def _execute_tool_command(tool: str, command: str, timeout: int | None, ct
     if ctx:
         is_pipe = "|" in command
         message = "Executing" + (" piped" if is_pipe else "") + f" {tool} command"
-        await ctx.info(message + (f" with timeout: {timeout}s" if timeout else ""))
+        await ctx.info(message + (f" with timeout: {actual_timeout}s" if actual_timeout else ""))
 
     try:
-        result = await execute_command(command, timeout)
+        result = await execute_command(command, timeout=actual_timeout)
 
         if result["status"] == "success":
             if ctx:

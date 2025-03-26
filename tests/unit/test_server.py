@@ -150,7 +150,7 @@ def test_server_initialization():
     """Test server startup and prompt registration."""
     from k8s_mcp_server.server import SERVER_INFO, mcp
     assert mcp.name == "K8s MCP Server"
-    assert mcp.version == SERVER_INFO["version"]
+    assert mcp.server_info["version"] == SERVER_INFO["version"]
     assert len(mcp.prompts) > 0  # Verify prompts registered
 
 @pytest.mark.asyncio
