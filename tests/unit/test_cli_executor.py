@@ -1,5 +1,6 @@
 """Tests for the CLI executor module."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

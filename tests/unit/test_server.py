@@ -1,5 +1,6 @@
 """Tests for the server module."""
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
