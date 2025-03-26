@@ -1,7 +1,5 @@
 """Tests for the tools module."""
 
-import pytest
-
 from k8s_mcp_server.tools import (
     is_pipe_command,
     is_valid_k8s_tool,
@@ -67,7 +65,10 @@ def test_split_pipe_command():
     assert split_pipe_command("kubectl get pods | grep nginx | wc -l") == ["kubectl get pods", "grep nginx", "wc -l"]
 
     # Command with quotes
-    assert split_pipe_command("kubectl get pods -l 'app=nginx' | grep Running") == ["kubectl get pods -l 'app=nginx'", "grep Running"]
+    assert split_pipe_command("kubectl get pods -l 'app=nginx' | grep Running") == [
+        "kubectl get pods -l 'app=nginx'",
+        "grep Running",
+    ]
 
     # Command with no pipes
     assert split_pipe_command("kubectl get pods") == ["kubectl get pods"]

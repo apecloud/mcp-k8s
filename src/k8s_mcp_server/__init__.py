@@ -5,4 +5,4 @@ Kubernetes CLI tools such as kubectl, istioctl, helm, and argocd in a
 safe, containerized environment.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.0.0"

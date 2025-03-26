@@ -12,11 +12,6 @@ Environment variables:
 import os
 from pathlib import Path
 
-from k8s_mcp_server import __version__
-
-# Server information
-SERVER_INFO = {"name": "K8s MCP Server", "version": __version__}
-
 # Command execution settings
 DEFAULT_TIMEOUT = int(os.environ.get("K8S_MCP_TIMEOUT", "300"))
 MAX_OUTPUT_SIZE = int(os.environ.get("K8S_MCP_MAX_OUTPUT", "100000"))
@@ -62,8 +57,8 @@ Supported CLI tools:
 - argocd: GitOps continuous delivery tool for Kubernetes
 
 Available tools:
-- Use describe_command to get documentation for any supported CLI tool
-- Use execute_command to run commands with any supported CLI tool
+- Use describe_kubectl, describe_helm, describe_istioctl, or describe_argocd to get documentation for CLI tools
+- Use execute_kubectl, execute_helm, execute_istioctl, or execute_argocd to run commands
 
 Command execution supports Unix pipes (|) to filter or transform output:
   Example: kubectl get pods -o json | jq '.items[].metadata.name'

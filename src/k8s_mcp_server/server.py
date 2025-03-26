@@ -12,6 +12,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
 from pydantic.fields import FieldInfo
 
+from k8s_mcp_server import __version__
 from k8s_mcp_server.cli_executor import (
     CommandExecutionError,
     CommandValidationError,
@@ -19,7 +20,7 @@ from k8s_mcp_server.cli_executor import (
     execute_command,
     get_command_help,
 )
-from k8s_mcp_server.config import DEFAULT_TIMEOUT, INSTRUCTIONS, SERVER_INFO, SUPPORTED_CLI_TOOLS
+from k8s_mcp_server.config import DEFAULT_TIMEOUT, INSTRUCTIONS, SUPPORTED_CLI_TOOLS
 from k8s_mcp_server.logging_utils import configure_root_logger, get_logger
 from k8s_mcp_server.prompts import register_prompts
 from k8s_mcp_server.tools import CommandHelpResult, CommandResult
@@ -63,7 +64,7 @@ cli_status = run_startup_checks()
 mcp = FastMCP(
     name="K8s MCP Server",
     instructions=INSTRUCTIONS,
-    server_info=SERVER_INFO,
+    version=__version__,
 )
 
 # Register prompt templates

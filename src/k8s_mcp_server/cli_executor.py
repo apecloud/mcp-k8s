@@ -7,7 +7,6 @@ validation, context/namespace injection, and resource limitations.
 """
 
 import asyncio
-import resource
 import shlex
 import time
 
@@ -16,7 +15,6 @@ from k8s_mcp_server.config import (
     K8S_CONTEXT,
     K8S_NAMESPACE,
     MAX_OUTPUT_SIZE,
-    RESOURCE_LIMITS,
     SUPPORTED_CLI_TOOLS,
 )
 from k8s_mcp_server.logging_utils import get_logger
@@ -52,19 +50,6 @@ class CommandExecutionError(Exception):
     """
 
     pass
-
-
-def set_resource_limits() -> None:
-    """Set resource limits for the current process.
-
-    Applies CPU and memory limits based on configuration.
-    """
-    # Set memory limit (soft limit only)
-    memory_bytes = RESOURCE_LIMITS["memory_mb"] * 1024 * 1024
-    resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
-
-    # Note: CPU percentage limiting is handled by the OS scheduler
-    # and can't be directly set with resource module
 
 
 async def check_cli_installed(cli_tool: str) -> bool:
@@ -176,15 +161,11 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
     start_time = time.time()
 
     try:
-        # Set resource limits before creating subprocess
-        set_resource_limits()
-
         # Create subprocess with resource limits
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            preexec_fn=set_resource_limits,  # Apply limits to child process
         )
 
         # Wait for the process to complete with timeout

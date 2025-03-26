@@ -3,17 +3,15 @@
 Running this module will start the K8s MCP Server.
 """
 
-import asyncio
 import logging
 import os
 import sys
-from typing import Any, Dict, Optional
 
 # Configure logging before importing server
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)]
+    handlers=[logging.StreamHandler(sys.stderr)],
 )
 logger = logging.getLogger("k8s-mcp-server")
 
@@ -26,7 +24,7 @@ def main() -> None:
     # Get server configuration from environment variables
     host = os.environ.get("K8S_MCP_HOST", "0.0.0.0")
     port = int(os.environ.get("K8S_MCP_PORT", "8080"))
-    
+
     # Start the server
     logger.info(f"Starting K8s MCP Server on {host}:{port}")
     mcp.run(host=host, port=port)

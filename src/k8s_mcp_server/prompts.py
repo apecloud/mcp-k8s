@@ -41,9 +41,7 @@ Include commands to:
 Structure the commands to be easily executed and parsed."""
 
     @mcp.prompt()
-    def k8s_deploy_application(
-        app_name: str, image: str, namespace: str = "default", replicas: int = 1
-    ) -> str:
+    def k8s_deploy_application(app_name: str, image: str, namespace: str = "default", replicas: int = 1) -> str:
         """Generate kubectl commands to deploy an application.
 
         Args:
