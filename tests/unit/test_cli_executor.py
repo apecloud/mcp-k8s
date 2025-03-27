@@ -47,64 +47,188 @@ def test_is_safe_exec_command():
     assert is_safe_exec_command("kubectl logs pod-name") is True
 
 
-def test_inject_context_namespace():
-    """Test the inject_context_namespace function."""
-    # Mock context and namespace settings
+@pytest.mark.parametrize(
+    "command,expected_contains,not_expected_contains,context,namespace",
+    [
+        # Basic command injection
+        (
+            "kubectl get pods",
+            ["kubectl", "--context=test-context", "--namespace=test-namespace", "get", "pods"],
+            [],
+            "test-context",
+            "test-namespace",
+        ),
+        # Command with explicit namespace
+        (
+            "kubectl get pods -n default",
+            ["kubectl", "--context=test-context", "get", "pods", "-n", "default"],
+            ["--namespace=test-namespace"],
+            "test-context",
+            "test-namespace",
+        ),
+        # Command with explicit context
+        (
+            "kubectl --context=prod get pods",
+            ["kubectl", "--context=prod", "--namespace=test-namespace", "get", "pods"],
+            ["--context=test-context"],
+            "test-context",
+            "test-namespace",
+        ),
+        # Command with all namespaces flag
+        (
+            "kubectl get pods -A",
+            ["kubectl", "--context=test-context", "get", "pods", "-A"],
+            ["--namespace=test-namespace"],
+            "test-context",
+            "test-namespace",
+        ),
+        # Command with all namespaces long flag
+        (
+            "kubectl get pods --all-namespaces",
+            ["kubectl", "--context=test-context", "get", "pods", "--all-namespaces"],
+            ["--namespace=test-namespace"],
+            "test-context",
+            "test-namespace",
+        ),
+        # Non-namespaced resource
+        (
+            "kubectl get nodes",
+            ["kubectl", "--context=test-context", "get", "nodes"],
+            ["--namespace=test-namespace"],
+            "test-context",
+            "test-namespace",
+        ),
+        # Non-namespaced resource with abbreviation
+        (
+            "kubectl get ns",
+            ["kubectl", "--context=test-context", "get", "ns"],
+            ["--namespace=test-namespace"],
+            "test-context",
+            "test-namespace",
+        ),
+        # Cluster-scoped command
+        (
+            "kubectl cluster-info",
+            ["kubectl", "--context=test-context", "cluster-info"],
+            ["--namespace=test-namespace"],
+            "test-context",
+            "test-namespace",
+        ),
+        # API resources command
+        (
+            "kubectl api-resources",
+            ["kubectl", "--context=test-context", "api-resources"],
+            ["--namespace=test-namespace"],
+            "test-context",
+            "test-namespace",
+        ),
+        # Command with quotes
+        (
+            'kubectl get pods -l "app=nginx"',
+            ["kubectl", "--context=test-context", "--namespace=test-namespace", "get", "pods", "-l"],
+            [],
+            "test-context",
+            "test-namespace",
+        ),
+        # Non-kubectl command
+        (
+            "helm list",
+            ["helm", "list"],
+            ["--context=test-context", "--namespace=test-namespace"],
+            "test-context",
+            "test-namespace",
+        ),
+        # istioctl command
+        (
+            "istioctl analyze",
+            ["istioctl", "--context=test-context", "--namespace=test-namespace", "analyze"],
+            [],
+            "test-context",
+            "test-namespace",
+        ),
+        # Config command (cluster-scoped)
+        (
+            "kubectl config view",
+            ["kubectl", "--context=test-context", "config", "view"],
+            ["--namespace=test-namespace"],
+            "test-context",
+            "test-namespace",
+        ),
+        # Version command (cluster-scoped)
+        (
+            "kubectl version",
+            ["kubectl", "--context=test-context", "version"],
+            ["--namespace=test-namespace"],
+            "test-context",
+            "test-namespace",
+        ),
+        # Multi-resource command
+        (
+            "kubectl get pods,services",
+            ["kubectl", "--context=test-context", "--namespace=test-namespace", "get", "pods,services"],
+            [],
+            "test-context",
+            "test-namespace",
+        ),
+        # Specific resource name
+        (
+            "kubectl get pod nginx-pod",
+            ["kubectl", "--context=test-context", "--namespace=test-namespace", "get", "pod", "nginx-pod"],
+            [],
+            "test-context",
+            "test-namespace",
+        ),
+    ],
+)
+def test_inject_context_namespace_parametrized(command, expected_contains, not_expected_contains, context, namespace):
+    """Test context and namespace injection with parametrized inputs."""
+    with patch("k8s_mcp_server.cli_executor.K8S_CONTEXT", context):
+        with patch("k8s_mcp_server.cli_executor.K8S_NAMESPACE", namespace):
+            result = inject_context_namespace(command)
+
+            # Check that all expected parts are in the result
+            for expected_part in expected_contains:
+                assert expected_part in result, f"Expected '{expected_part}' in result: {result}"
+
+            # Check that none of the not expected parts are in the result
+            for not_expected_part in not_expected_contains:
+                assert not_expected_part not in result, f"Not expected '{not_expected_part}' in result: {result}"
+
+
+def test_inject_context_namespace_empty_values():
+    """Test context and namespace injection with empty values."""
+    # Test with empty context
+    with patch("k8s_mcp_server.cli_executor.K8S_CONTEXT", ""):
+        with patch("k8s_mcp_server.cli_executor.K8S_NAMESPACE", "test-namespace"):
+            result = inject_context_namespace("kubectl get pods")
+            assert result == "kubectl --namespace=test-namespace get pods"
+
+    # Test with empty namespace
+    with patch("k8s_mcp_server.cli_executor.K8S_CONTEXT", "test-context"):
+        with patch("k8s_mcp_server.cli_executor.K8S_NAMESPACE", ""):
+            result = inject_context_namespace("kubectl get pods")
+            assert result == "kubectl --context=test-context get pods"
+
+    # Test with both empty
+    with patch("k8s_mcp_server.cli_executor.K8S_CONTEXT", ""):
+        with patch("k8s_mcp_server.cli_executor.K8S_NAMESPACE", ""):
+            result = inject_context_namespace("kubectl get pods")
+            assert result == "kubectl get pods"
+
+
+def test_inject_context_namespace_error_handling():
+    """Test error handling in the context and namespace injection."""
     with patch("k8s_mcp_server.cli_executor.K8S_CONTEXT", "test-context"):
         with patch("k8s_mcp_server.cli_executor.K8S_NAMESPACE", "test-namespace"):
-            # Basic kubectl command should get both context and namespace
-            assert "kubectl --context=test-context --namespace=test-namespace get pods" == inject_context_namespace("kubectl get pods")
-
-            # Command with explicit namespace should not get namespace injected
-            # Adjust assert based on actual implementation behavior
-            actual = inject_context_namespace("kubectl get pods -n default")
-            assert "-n" in actual
-            assert "--context=test-context" in actual
-            assert "default" in actual
-            assert "get pods" in actual
-
-            # Command with explicit context should not get context injected
-            # Adjust assert based on actual implementation behavior
-            actual = inject_context_namespace("kubectl --context=prod get pods")
-            assert "--context=prod" in actual
-            assert "test-namespace" in actual
-            assert "get pods" in actual
-
-            # Command targeting non-namespaced resources should not get namespace injected
-            assert "kubectl --context=test-context get nodes" == inject_context_namespace("kubectl get nodes")
-
-            # Non-kubectl commands should not be modified
-            assert "helm list" == inject_context_namespace("helm list")
-
-            # istioctl should also get context and namespace
-            # Adjust assert based on actual implementation behavior
-            actual = inject_context_namespace("istioctl analyze")
-            assert "istioctl" in actual
-            assert "--context=test-context" in actual
-            assert "analyze" in actual
-            # The actual implementation may or may not add namespace for this command
-
-            # Test with combined short flags
-            actual = inject_context_namespace("kubectl get pods -n default -l app=nginx")
-            assert "-n" in actual
-            assert "--context=test-context" in actual
-
-            # Test with -A flag (all namespaces)
-            actual = inject_context_namespace("kubectl get pods -A")
-            assert "-A" in actual
-            assert "--context=test-context" in actual
-            assert "--namespace=" not in actual
-
-            # Test with cluster-scoped command
-            actual = inject_context_namespace("kubectl api-resources")
-            assert "--context=test-context" in actual
-            assert "--namespace=" not in actual
-
             # Test with invalid command format
             with patch("k8s_mcp_server.cli_executor.logger") as mock_logger:
-                actual = inject_context_namespace('kubectl get pods "unclosed quote')
+                command = 'kubectl get pods "unclosed quote'
+                result = inject_context_namespace(command)
                 mock_logger.warning.assert_called_once()
-                assert actual == 'kubectl get pods "unclosed quote'
+                assert result == command
+
+            # Test with empty command
+            assert inject_context_namespace("") == ""
 
 
 def test_is_auth_error():

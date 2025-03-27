@@ -84,12 +84,7 @@ def test_namespace(ensure_cluster_running) -> Generator[str]:
     try:
         # Create namespace
         create_cmd = ["kubectl", "create", "namespace", namespace] + context_args + kubeconfig_args
-        subprocess.run(
-            create_cmd,
-            capture_output=True,
-            check=True,
-            timeout=10
-        )
+        subprocess.run(create_cmd, capture_output=True, check=True, timeout=10)
         print(f"Created test namespace: {namespace}")
     except subprocess.CalledProcessError as e:
         if b"AlreadyExists" in e.stderr:
@@ -114,12 +109,7 @@ def test_namespace(ensure_cluster_running) -> Generator[str]:
         # Clean up namespace
         print(f"Cleaning up test namespace: {namespace}")
         delete_cmd = ["kubectl", "delete", "namespace", namespace, "--wait=false"] + context_args + kubeconfig_args
-        subprocess.run(
-            delete_cmd,
-            capture_output=True,
-            check=False,
-            timeout=10
-        )
+        subprocess.run(delete_cmd, capture_output=True, check=False, timeout=10)
     except Exception as e:
         print(f"Warning: Error when cleaning up test namespace: {e}")
 
@@ -161,8 +151,7 @@ async def test_kubectl_get_pods(ensure_cluster_running, test_namespace):
     # and apply the pod manifest directly using subprocess
     kubeconfig = os.environ.get("KUBECONFIG")
     print("Applying pod manifest directly using kubectl...")
-    cmd = ["kubectl", "apply", "-f", "/tmp/test-pod.yaml",
-           "--namespace", test_namespace, "--context", k8s_context]
+    cmd = ["kubectl", "apply", "-f", "/tmp/test-pod.yaml", "--namespace", test_namespace, "--context", k8s_context]
     if kubeconfig:
         cmd.extend(["--kubeconfig", kubeconfig])
 
@@ -184,8 +173,7 @@ async def test_kubectl_get_pods(ensure_cluster_running, test_namespace):
     # Now test listing pods
     # First check directly with kubectl to confirm the pod exists
     print("Verifying pod exists with direct kubectl...")
-    list_cmd = ["kubectl", "get", "pods",
-               "--namespace", test_namespace, "--context", k8s_context]
+    list_cmd = ["kubectl", "get", "pods", "--namespace", test_namespace, "--context", k8s_context]
     if kubeconfig:
         list_cmd.extend(["--kubeconfig", kubeconfig])
 
@@ -197,9 +185,7 @@ async def test_kubectl_get_pods(ensure_cluster_running, test_namespace):
 
     # Use the server function with the subcommand in quotes and use a different flag format
     # This format should prevent argument reordering issues
-    result = await execute_kubectl(
-        command=f"get pods --namespace={test_namespace}"
-    )
+    result = await execute_kubectl(command=f"get pods --namespace={test_namespace}")
 
     assert result["status"] == "success", f"Get pods failed: {result.get('error')}"
     assert "test-pod" in result["output"], f"Pod not found in output: {result['output']}"
@@ -212,7 +198,7 @@ async def test_kubectl_help(ensure_cluster_running):
     result = await describe_kubectl(command="get")
 
     # Use attribute access for dataclass instead of dictionary-like access
-    assert hasattr(result, "help_text") # Check attribute existence for dataclass
+    assert hasattr(result, "help_text")  # Check attribute existence for dataclass
     assert "Display one or many resources" in result.help_text
 
 

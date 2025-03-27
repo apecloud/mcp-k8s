@@ -186,11 +186,7 @@ async def describe_kubectl(
         logger.error(f"Error in describe_kubectl: {e}")
         if ctx:
             await ctx.error(f"Unexpected error retrieving kubectl help: {str(e)}")
-        return CommandHelpResult(
-            help_text=f"Error retrieving kubectl help: {str(e)}",
-            status="error",
-            error={"message": str(e), "code": "INTERNAL_ERROR"}
-        )
+        return CommandHelpResult(help_text=f"Error retrieving kubectl help: {str(e)}", status="error", error={"message": str(e), "code": "INTERNAL_ERROR"})
 
 
 @mcp.tool()
@@ -228,11 +224,7 @@ async def describe_helm(
         logger.error(f"Error in describe_helm: {e}")
         if ctx:
             await ctx.error(f"Unexpected error retrieving Helm help: {str(e)}")
-        return CommandHelpResult(
-            help_text=f"Error retrieving Helm help: {str(e)}",
-            status="error",
-            error={"message": str(e), "code": "INTERNAL_ERROR"}
-        )
+        return CommandHelpResult(help_text=f"Error retrieving Helm help: {str(e)}", status="error", error={"message": str(e), "code": "INTERNAL_ERROR"})
 
 
 @mcp.tool()
@@ -270,11 +262,7 @@ async def describe_istioctl(
         logger.error(f"Error in describe_istioctl: {e}")
         if ctx:
             await ctx.error(f"Unexpected error retrieving istioctl help: {str(e)}")
-        return CommandHelpResult(
-            help_text=f"Error retrieving istioctl help: {str(e)}",
-            status="error",
-            error={"message": str(e), "code": "INTERNAL_ERROR"}
-        )
+        return CommandHelpResult(help_text=f"Error retrieving istioctl help: {str(e)}", status="error", error={"message": str(e), "code": "INTERNAL_ERROR"})
 
 
 @mcp.tool()
@@ -312,11 +300,7 @@ async def describe_argocd(
         logger.error(f"Error in describe_argocd: {e}")
         if ctx:
             await ctx.error(f"Unexpected error retrieving ArgoCD help: {str(e)}")
-        return CommandHelpResult(
-            help_text=f"Error retrieving ArgoCD help: {str(e)}",
-            status="error",
-            error={"message": str(e), "code": "INTERNAL_ERROR"}
-        )
+        return CommandHelpResult(help_text=f"Error retrieving ArgoCD help: {str(e)}", status="error", error={"message": str(e), "code": "INTERNAL_ERROR"})
 
 
 # Tool-specific command execution functions

@@ -72,6 +72,7 @@ def mock_execute_command():
 def mock_get_command_help():
     """Fixture that mocks the get_command_help function."""
     from k8s_mcp_server.tools import CommandHelpResult
+
     mock = AsyncMock()
     mock.return_value = CommandHelpResult(help_text="Mocked help text", status="success")
     with patch("k8s_mcp_server.server.get_command_help", mock):
@@ -83,9 +84,7 @@ def mock_command_execution(return_value=None):
     if return_value is None:
         return_value = {"status": "success", "output": "Mocked command output"}
 
-    return patch("k8s_mcp_server.cli_executor.execute_command",
-                new_callable=AsyncMock,
-                return_value=return_value)
+    return patch("k8s_mcp_server.cli_executor.execute_command", new_callable=AsyncMock, return_value=return_value)
 
 
 # We use the default event_loop fixture provided by pytest-asyncio

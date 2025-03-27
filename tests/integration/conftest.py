@@ -90,6 +90,7 @@ def k8s_namespace(k8s_cluster):
     with k8s_cluster.temp_namespace() as name:
         yield name
 
+
 @pytest.fixture(scope="session", name="integration_cluster")
 def integration_cluster_fixture() -> Generator[str]:
     """Fixture to ensure a K8s cluster is available for integration tests.
@@ -113,14 +114,11 @@ def integration_cluster_fixture() -> Generator[str]:
                 cmd.extend(["--context", context])
 
             result = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=20)
-            print(f"Existing cluster connection verified:\n{result.stdout[:200]}...") # Print snippet
+            print(f"Existing cluster connection verified:\n{result.stdout[:200]}...")  # Print snippet
 
             # Return the current context if not explicitly specified
             if not context:
-                context = subprocess.run(
-                    ["kubectl", "config", "current-context"],
-                    check=True, capture_output=True, text=True
-                ).stdout.strip()
+                context = subprocess.run(["kubectl", "config", "current-context"], check=True, capture_output=True, text=True).stdout.strip()
 
             yield context
             print("\nSkipping cluster teardown (using existing cluster).")
@@ -131,12 +129,11 @@ def integration_cluster_fixture() -> Generator[str]:
             pytest.fail("Timed out connecting to the existing Kubernetes cluster. Check KUBECONFIG or cluster status.", pytrace=False)
         except subprocess.CalledProcessError as e:
             pytest.fail(
-                f"Failed to connect to the existing Kubernetes cluster (Command: {' '.join(e.cmd)}). "
-                f"Check KUBECONFIG or cluster status.\nError: {e.stderr}",
-                pytrace=False
+                f"Failed to connect to the existing Kubernetes cluster (Command: {' '.join(e.cmd)}). Check KUBECONFIG or cluster status.\nError: {e.stderr}",
+                pytrace=False,
             )
         except Exception as e:
-             pytest.fail(f"An unexpected error occurred while verifying the existing cluster: {e}", pytrace=False)
+            pytest.fail(f"An unexpected error occurred while verifying the existing cluster: {e}", pytrace=False)
 
     elif use_kwok:
         # Create a KWOK cluster for integration tests
@@ -146,11 +143,7 @@ def integration_cluster_fixture() -> Generator[str]:
         try:
             subprocess.run(["kwokctl", "--version"], check=True, capture_output=True, text=True)
         except FileNotFoundError:
-            pytest.fail(
-                "kwokctl not found. Please install KWOK following the instructions at "
-                "https://kwok.sigs.k8s.io/docs/user/install/",
-                pytrace=False
-            )
+            pytest.fail("kwokctl not found. Please install KWOK following the instructions at https://kwok.sigs.k8s.io/docs/user/install/", pytrace=False)
 
         # Create a unique cluster name
         cluster_name = f"k8s-mcp-test-{uuid.uuid4().hex[:8]}"
@@ -160,11 +153,7 @@ def integration_cluster_fixture() -> Generator[str]:
         try:
             # Create KWOK cluster
             print(f"Creating KWOK cluster: {cluster_name}")
-            create_cmd = [
-                "kwokctl", "create", "cluster",
-                "--name", cluster_name,
-                "--kubeconfig", kubeconfig_path
-            ]
+            create_cmd = ["kwokctl", "create", "cluster", "--name", cluster_name, "--kubeconfig", kubeconfig_path]
             subprocess.run(create_cmd, check=True, timeout=60)
 
             # Store the original KUBECONFIG value to restore later
@@ -179,9 +168,7 @@ def integration_cluster_fixture() -> Generator[str]:
 
             # Get the context name
             context_cmd = ["kubectl", "--kubeconfig", kubeconfig_path, "config", "current-context"]
-            context = subprocess.run(
-                context_cmd, check=True, capture_output=True, text=True
-            ).stdout.strip()
+            context = subprocess.run(context_cmd, check=True, capture_output=True, text=True).stdout.strip()
 
             print(f"KWOK cluster '{cluster_name}' created with context '{context}'")
 
@@ -202,6 +189,7 @@ def integration_cluster_fixture() -> Generator[str]:
             # Clean up the temporary directory
             try:
                 import shutil
+
                 shutil.rmtree(kubeconfig_dir, ignore_errors=True)
             except Exception as e:
                 print(f"Warning: Failed to clean up temporary directory: {e}")
@@ -211,19 +199,13 @@ def integration_cluster_fixture() -> Generator[str]:
         except subprocess.TimeoutExpired:
             pytest.fail("Timed out creating or deleting KWOK cluster", pytrace=False)
         except subprocess.CalledProcessError as e:
-            pytest.fail(
-                f"Failed to create or manage KWOK cluster: {e.stderr if hasattr(e, 'stderr') else str(e)}",
-                pytrace=False
-            )
+            pytest.fail(f"Failed to create or manage KWOK cluster: {e.stderr if hasattr(e, 'stderr') else str(e)}", pytrace=False)
         except Exception as e:
             pytest.fail(f"An unexpected error occurred while managing KWOK cluster: {e}", pytrace=False)
 
             # Attempt cleanup on failure
             try:
-                subprocess.run(
-                    ["kwokctl", "delete", "cluster", "--name", cluster_name],
-                    check=False, timeout=30
-                )
+                subprocess.run(["kwokctl", "delete", "cluster", "--name", cluster_name], check=False, timeout=30)
             except Exception:
                 pass
     else:
@@ -233,10 +215,7 @@ def integration_cluster_fixture() -> Generator[str]:
 
         if not context:
             try:
-                context = subprocess.run(
-                    ["kubectl", "config", "current-context"],
-                    check=True, capture_output=True, text=True
-                ).stdout.strip()
+                context = subprocess.run(["kubectl", "config", "current-context"], check=True, capture_output=True, text=True).stdout.strip()
             except Exception:
                 context = None
 

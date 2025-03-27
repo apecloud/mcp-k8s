@@ -1,7 +1,5 @@
 """Tests for the error handling module."""
 
-import pytest
-
 from k8s_mcp_server.errors import (
     AuthenticationError,
     CommandExecutionError,
@@ -66,7 +64,7 @@ def test_create_error_result():
     """Test the create_error_result function."""
     error = CommandValidationError("Invalid command", {"command": "kubectl get pods"})
     result = create_error_result(error, command="kubectl get pods", exit_code=1, stderr="Error output")
-    
+
     assert result["status"] == "error"
     assert result["output"] == "Invalid command"
     assert result["exit_code"] == 1
@@ -81,7 +79,7 @@ def test_create_error_result_with_custom_details():
     """Test that custom details from the error are included in the result."""
     error = CommandExecutionError("Command failed", {"custom_key": "custom_value"})
     result = create_error_result(error)
-    
+
     assert result["status"] == "error"
     assert result["output"] == "Command failed"
     assert result["error"]["message"] == "Command failed"

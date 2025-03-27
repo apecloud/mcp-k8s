@@ -1,7 +1,8 @@
 """Tests for the security module."""
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from k8s_mcp_server.security import (
     DANGEROUS_COMMANDS,
@@ -22,7 +23,7 @@ def test_validation_rule_class():
         description="Get Kubernetes resources",
         error_message="Invalid get command",
     )
-    
+
     # Check the attributes
     assert rule.pattern == "kubectl get"
     assert rule.description == "Get Kubernetes resources"
@@ -62,13 +63,13 @@ def test_dangerous_and_safe_commands():
     # Check that all CLI tools in DANGEROUS_COMMANDS have corresponding SAFE_PATTERNS
     for cli_tool in DANGEROUS_COMMANDS:
         assert cli_tool in SAFE_PATTERNS, f"{cli_tool} exists in DANGEROUS_COMMANDS but not in SAFE_PATTERNS"
-    
+
     # Check for specific patterns we expect to be in the dictionaries
     assert "kubectl delete" in DANGEROUS_COMMANDS["kubectl"]
     assert "kubectl exec" in DANGEROUS_COMMANDS["kubectl"]
     assert "kubectl delete pod" in SAFE_PATTERNS["kubectl"]
     assert "kubectl exec -it" in SAFE_PATTERNS["kubectl"]
-    
+
     # Check for Helm dangerous commands
     assert "helm delete" in DANGEROUS_COMMANDS["helm"]
     assert "helm delete --help" in SAFE_PATTERNS["helm"]
@@ -96,11 +97,11 @@ def test_validate_k8s_command_edge_cases():
     # Check that non-kubectl commands are verified properly
     validate_k8s_command("helm list")
     validate_k8s_command("istioctl version")
-    
+
     # Test dangerous commands
     with pytest.raises(ValueError):
         validate_k8s_command("helm delete")
-    
+
     # Test safe override of dangerous command
     validate_k8s_command("helm delete --help")
 
@@ -137,13 +138,13 @@ def test_validate_command():
         with patch("k8s_mcp_server.security.validate_k8s_command") as mock_validate_k8s:
             validate_command("kubectl get pods")
             mock_validate_k8s.assert_called_once_with("kubectl get pods")
-    
+
     # Test with actual commands
     validate_command("kubectl get pods")
     validate_command("kubectl get pods | grep nginx")
-    
+
     with pytest.raises(ValueError):
         validate_command("kubectl delete")
-        
+
     with pytest.raises(ValueError):
         validate_command("kubectl exec pod-name -- /bin/bash")

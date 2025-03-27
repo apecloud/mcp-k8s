@@ -20,12 +20,16 @@ from k8s_mcp_server.server import (
 # Tests for describe_* functions
 # ==============================
 
-@pytest.mark.parametrize("describe_func, tool_name, command", [
-    (describe_kubectl, "kubectl", "get"),
-    (describe_helm, "helm", "list"),
-    (describe_istioctl, "istioctl", "analyze"),
-    (describe_argocd, "argocd", "app"),
-])
+
+@pytest.mark.parametrize(
+    "describe_func, tool_name, command",
+    [
+        (describe_kubectl, "kubectl", "get"),
+        (describe_helm, "helm", "list"),
+        (describe_istioctl, "istioctl", "analyze"),
+        (describe_argocd, "argocd", "app"),
+    ],
+)
 @pytest.mark.asyncio
 async def test_describe_tool(describe_func, tool_name, command, mock_get_command_help, mock_k8s_cli_status):
     """Test the describe_* tools."""
@@ -36,12 +40,15 @@ async def test_describe_tool(describe_func, tool_name, command, mock_get_command
     mock_get_command_help.assert_called_once_with(tool_name, command)
 
 
-@pytest.mark.parametrize("describe_func, tool_name", [
-    (describe_kubectl, "kubectl"),
-    (describe_helm, "helm"),
-    (describe_istioctl, "istioctl"),
-    (describe_argocd, "argocd"),
-])
+@pytest.mark.parametrize(
+    "describe_func, tool_name",
+    [
+        (describe_kubectl, "kubectl"),
+        (describe_helm, "helm"),
+        (describe_istioctl, "istioctl"),
+        (describe_argocd, "argocd"),
+    ],
+)
 @pytest.mark.asyncio
 async def test_describe_tool_with_context(describe_func, tool_name, mock_get_command_help, mock_k8s_cli_status):
     """Test the describe_* tools with context."""
@@ -53,12 +60,15 @@ async def test_describe_tool_with_context(describe_func, tool_name, mock_get_com
     mock_context.info.assert_called_once()
 
 
-@pytest.mark.parametrize("describe_func", [
-    describe_kubectl,
-    describe_helm,
-    describe_istioctl,
-    describe_argocd,
-])
+@pytest.mark.parametrize(
+    "describe_func",
+    [
+        describe_kubectl,
+        describe_helm,
+        describe_istioctl,
+        describe_argocd,
+    ],
+)
 @pytest.mark.asyncio
 async def test_describe_tool_with_error(describe_func, mock_k8s_cli_status):
     """Test the describe_* tools when get_command_help raises an error."""
@@ -75,12 +85,16 @@ async def test_describe_tool_with_error(describe_func, mock_k8s_cli_status):
 # Tests for execute_* functions
 # ==============================
 
-@pytest.mark.parametrize("execute_func, tool_name, command", [
-    (execute_kubectl, "kubectl", "get pods"),
-    (execute_helm, "helm", "list"),
-    (execute_istioctl, "istioctl", "analyze"),
-    (execute_argocd, "argocd", "app list"),
-])
+
+@pytest.mark.parametrize(
+    "execute_func, tool_name, command",
+    [
+        (execute_kubectl, "kubectl", "get pods"),
+        (execute_helm, "helm", "list"),
+        (execute_istioctl, "istioctl", "analyze"),
+        (execute_argocd, "argocd", "app list"),
+    ],
+)
 @pytest.mark.asyncio
 async def test_execute_tool(execute_func, tool_name, command, mock_execute_command, mock_k8s_cli_status):
     """Test the execute_* tools."""
@@ -91,12 +105,15 @@ async def test_execute_tool(execute_func, tool_name, command, mock_execute_comma
         mock_execute_command.assert_called_once()
 
 
-@pytest.mark.parametrize("execute_func", [
-    execute_kubectl,
-    execute_helm,
-    execute_istioctl,
-    execute_argocd,
-])
+@pytest.mark.parametrize(
+    "execute_func",
+    [
+        execute_kubectl,
+        execute_helm,
+        execute_istioctl,
+        execute_argocd,
+    ],
+)
 @pytest.mark.asyncio
 async def test_execute_tool_with_context(execute_func, mock_execute_command, mock_k8s_cli_status):
     """Test the execute_* tools with context."""
@@ -110,12 +127,15 @@ async def test_execute_tool_with_context(execute_func, mock_execute_command, moc
         mock_context.info.assert_called()
 
 
-@pytest.mark.parametrize("execute_func", [
-    execute_kubectl,
-    execute_helm,
-    execute_istioctl,
-    execute_argocd,
-])
+@pytest.mark.parametrize(
+    "execute_func",
+    [
+        execute_kubectl,
+        execute_helm,
+        execute_istioctl,
+        execute_argocd,
+    ],
+)
 @pytest.mark.asyncio
 async def test_execute_tool_with_validation_error(execute_func, mock_k8s_cli_status):
     """Test the execute_* tools when validation fails."""
@@ -132,12 +152,15 @@ async def test_execute_tool_with_validation_error(execute_func, mock_k8s_cli_sta
         assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
-@pytest.mark.parametrize("execute_func", [
-    execute_kubectl,
-    execute_helm,
-    execute_istioctl,
-    execute_argocd,
-])
+@pytest.mark.parametrize(
+    "execute_func",
+    [
+        execute_kubectl,
+        execute_helm,
+        execute_istioctl,
+        execute_argocd,
+    ],
+)
 @pytest.mark.asyncio
 async def test_execute_tool_with_execution_error(execute_func, mock_k8s_cli_status):
     """Test the execute_* tools when execution fails."""
@@ -192,10 +215,7 @@ async def test_long_running_command(mock_k8s_cli_status):
     """Test timeout handling for near-limit executions."""
     # Patch execute_command within the server module's scope
     with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_exec:
-        mock_exec.return_value = {
-            "status": "error",
-            "output": "Command timed out after 0.1 seconds"
-        }
+        mock_exec.return_value = {"status": "error", "output": "Command timed out after 0.1 seconds"}
         result = await execute_kubectl("get pods", timeout=0.1)
         assert "timed out" in result["output"].lower()
         # Check that the timeout value was passed correctly to the patched function

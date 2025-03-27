@@ -5,8 +5,23 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from k8s_mcp_server.cli_executor import CommandExecutionError, CommandValidationError
-from k8s_mcp_server.server import describe_kubectl, execute_kubectl
+from k8s_mcp_server.cli_executor import (
+    AuthenticationError,
+    CommandExecutionError,
+    CommandTimeoutError,
+    CommandValidationError,
+)
+from k8s_mcp_server.server import (
+    describe_argocd,
+    describe_helm,
+    describe_istioctl,
+    describe_kubectl,
+    execute_argocd,
+    execute_helm,
+    execute_istioctl,
+    execute_kubectl,
+    run_startup_checks,
+)
 
 
 @pytest.mark.unit
@@ -274,7 +289,6 @@ async def test_execute_tool_command_with_field_info_timeout():
 def test_run_startup_checks(kubectl_installed, other_tools_installed):
     """Test run_startup_checks with different installation scenarios."""
     from k8s_mcp_server.config import SUPPORTED_CLI_TOOLS
-    from k8s_mcp_server.server import run_startup_checks
 
     def mock_check_cli_installed_factory(kubectl_status, other_status):
         """Create a mock for check_cli_installed."""
@@ -314,7 +328,6 @@ def test_run_startup_checks(kubectl_installed, other_tools_installed):
 
 def test_run_startup_checks_kubectl_missing():
     """Test run_startup_checks when kubectl is not installed."""
-    from k8s_mcp_server.server import run_startup_checks
 
     async def mock_check_cli_installed(cli_tool):
         return False  # All tools missing
@@ -326,3 +339,298 @@ def test_run_startup_checks_kubectl_missing():
 
             # Verify sys.exit was called
             mock_exit.assert_called_once_with(1)
+
+
+# Tests for execute_kubectl_auth_error
+@pytest.mark.asyncio
+async def test_execute_kubectl_auth_error():
+    """Test the execute_kubectl tool with an authentication error."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
+        # Mock an authentication error
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.side_effect = AuthenticationError("Authentication error", {"command": "kubectl get pods"})
+
+            # Test with auth error
+            result = await execute_kubectl(command="get pods")
+
+            assert result["status"] == "error"
+            assert "Authentication error" in result["error"]["message"]
+            assert result["error"]["code"] == "AUTH_ERROR"
+            assert "command" in result["error"]["details"]
+
+            # The default timeout is 300
+            mock_execute.assert_called_once_with("kubectl get pods", timeout=300)
+
+
+# Tests for describe_helm
+@pytest.mark.asyncio
+async def test_describe_helm():
+    """Test the describe_helm tool."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"helm": True}):
+        # Test with valid command
+        from k8s_mcp_server.tools import CommandHelpResult
+        with patch("k8s_mcp_server.server.get_command_help", new_callable=AsyncMock) as mock_help:
+            mock_help.return_value = CommandHelpResult(help_text="Helm help text", status="success")
+
+            result = await describe_helm(command="list")
+
+            assert result.help_text == "Helm help text"
+            mock_help.assert_called_once_with("helm", "list")
+
+            # We'll skip testing the default parameter case (when command=None)
+            # since the Field() object makes it complex to mock correctly
+
+
+@pytest.mark.asyncio
+async def test_describe_helm_with_context():
+    """Test the describe_helm tool with context."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"helm": True}):
+        # Create a mock context
+        mock_context = AsyncMock()
+
+        # Test with valid command
+        with patch("k8s_mcp_server.server.get_command_help", new_callable=AsyncMock) as mock_help:
+            mock_help.return_value = {"status": "success", "help_text": "Helm help text"}
+
+            result = await describe_helm(command="list", ctx=mock_context)
+
+            assert hasattr(result, "help_text")
+            mock_help.assert_called_once_with("helm", "list")
+            mock_context.info.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_describe_helm_not_installed():
+    """Test the describe_helm tool when helm is not installed."""
+    # Mock CLI status to simulate helm not installed
+    with patch("k8s_mcp_server.server.cli_status", {"helm": False}):
+        # Test with helm not installed
+        result = await describe_helm(command="list")
+
+        assert result.status == "error"
+        assert "not installed" in result.help_text
+
+
+# Tests for execute_helm
+@pytest.mark.asyncio
+async def test_execute_helm():
+    """Test the execute_helm tool."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"helm": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.return_value = {"status": "success", "output": "Chart list", "execution_time": 0.5}
+
+            # Test with basic command
+            result = await execute_helm(command="list")
+
+            assert result["status"] == "success"
+            assert result["output"] == "Chart list"
+            mock_execute.assert_called_once_with("helm list", timeout=300)
+
+            # Test with command without helm prefix
+            mock_execute.reset_mock()
+            mock_execute.return_value = {"status": "success", "output": "Chart list", "execution_time": 0.5}
+
+            result = await execute_helm(command="list --all-namespaces")
+
+            assert result["status"] == "success"
+            mock_execute.assert_called_once_with("helm list --all-namespaces", timeout=300)
+
+
+@pytest.mark.asyncio
+async def test_execute_helm_not_installed():
+    """Test the execute_helm tool when helm is not installed."""
+    # Mock CLI status to simulate helm not installed
+    with patch("k8s_mcp_server.server.cli_status", {"helm": False}):
+        # Test with helm not installed
+        result = await execute_helm(command="list")
+
+        assert result["status"] == "error"
+        assert "not installed" in result["output"]
+
+
+@pytest.mark.asyncio
+async def test_execute_helm_error():
+    """Test the execute_helm tool with an error."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"helm": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.side_effect = CommandExecutionError("Execution error", {"command": "helm list"})
+
+            # Test with execution error
+            result = await execute_helm(command="list")
+
+            assert result["status"] == "error"
+            assert result["error"]["code"] == "EXECUTION_ERROR"
+            assert "Execution error" in result["error"]["message"]
+            mock_execute.assert_called_once_with("helm list", timeout=300)
+
+
+@pytest.mark.asyncio
+async def test_execute_helm_validation_error():
+    """Test the execute_helm tool with a validation error."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"helm": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.side_effect = CommandValidationError("Validation error", {"command": "helm list"})
+
+            # Test with validation error
+            result = await execute_helm(command="list")
+
+            assert result["status"] == "error"
+            assert result["error"]["code"] == "VALIDATION_ERROR"
+            assert "Validation error" in result["error"]["message"]
+            mock_execute.assert_called_once_with("helm list", timeout=300)
+
+
+@pytest.mark.asyncio
+async def test_execute_helm_timeout():
+    """Test the execute_helm tool with a timeout error."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"helm": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.side_effect = CommandTimeoutError("Command timed out", {"command": "helm list", "timeout": 30})
+
+            # Test with timeout error
+            result = await execute_helm(command="list", timeout=30)
+
+            assert result["status"] == "error"
+            assert result["error"]["code"] == "TIMEOUT_ERROR"
+            assert "timed out" in result["error"]["message"]
+            mock_execute.assert_called_once_with("helm list", timeout=30)
+
+
+@pytest.mark.asyncio
+async def test_execute_helm_auth_error():
+    """Test the execute_helm tool with an authentication error."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"helm": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.side_effect = AuthenticationError("Authentication error", {"command": "helm list"})
+
+            # Test with auth error
+            result = await execute_helm(command="list")
+
+            assert result["status"] == "error"
+            assert result["error"]["code"] == "AUTH_ERROR"
+            assert "Authentication error" in result["error"]["message"]
+            mock_execute.assert_called_once_with("helm list", timeout=300)
+
+
+# Tests for describe_istioctl
+@pytest.mark.asyncio
+async def test_describe_istioctl():
+    """Test the describe_istioctl tool."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"istioctl": True}):
+        # Test with valid command
+        from k8s_mcp_server.tools import CommandHelpResult
+        with patch("k8s_mcp_server.server.get_command_help", new_callable=AsyncMock) as mock_help:
+            mock_help.return_value = CommandHelpResult(help_text="Istio help text", status="success")
+
+            result = await describe_istioctl(command="analyze")
+
+            assert result.help_text == "Istio help text"
+            mock_help.assert_called_once_with("istioctl", "analyze")
+
+
+@pytest.mark.asyncio
+async def test_describe_istioctl_not_installed():
+    """Test the describe_istioctl tool when istioctl is not installed."""
+    # Mock CLI status to simulate istioctl not installed
+    with patch("k8s_mcp_server.server.cli_status", {"istioctl": False}):
+        # Test with istioctl not installed
+        result = await describe_istioctl(command="analyze")
+
+        assert result.status == "error"
+        assert "not installed" in result.help_text
+
+
+# Tests for execute_istioctl
+@pytest.mark.asyncio
+async def test_execute_istioctl():
+    """Test the execute_istioctl tool."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"istioctl": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.return_value = {"status": "success", "output": "Istio analyze", "execution_time": 0.5}
+
+            # Test with basic command
+            result = await execute_istioctl(command="analyze")
+
+            assert result["status"] == "success"
+            assert result["output"] == "Istio analyze"
+            mock_execute.assert_called_once_with("istioctl analyze", timeout=300)
+
+
+@pytest.mark.asyncio
+async def test_execute_istioctl_not_installed():
+    """Test the execute_istioctl tool when istioctl is not installed."""
+    # Mock CLI status to simulate istioctl not installed
+    with patch("k8s_mcp_server.server.cli_status", {"istioctl": False}):
+        # Test with istioctl not installed
+        result = await execute_istioctl(command="analyze")
+
+        assert result["status"] == "error"
+        assert "not installed" in result["output"]
+
+
+# Tests for describe_argocd
+@pytest.mark.asyncio
+async def test_describe_argocd():
+    """Test the describe_argocd tool."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"argocd": True}):
+        # Test with valid command
+        from k8s_mcp_server.tools import CommandHelpResult
+        with patch("k8s_mcp_server.server.get_command_help", new_callable=AsyncMock) as mock_help:
+            mock_help.return_value = CommandHelpResult(help_text="ArgoCD help text", status="success")
+
+            result = await describe_argocd(command="app list")
+
+            assert result.help_text == "ArgoCD help text"
+            mock_help.assert_called_once_with("argocd", "app list")
+
+
+@pytest.mark.asyncio
+async def test_describe_argocd_not_installed():
+    """Test the describe_argocd tool when argocd is not installed."""
+    # Mock CLI status to simulate argocd not installed
+    with patch("k8s_mcp_server.server.cli_status", {"argocd": False}):
+        # Test with argocd not installed
+        result = await describe_argocd(command="app list")
+
+        assert result.status == "error"
+        assert "not installed" in result.help_text
+
+
+# Tests for execute_argocd
+@pytest.mark.asyncio
+async def test_execute_argocd():
+    """Test the execute_argocd tool."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"argocd": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.return_value = {"status": "success", "output": "ArgoCD app list", "execution_time": 0.5}
+
+            # Test with basic command
+            result = await execute_argocd(command="app list")
+
+            assert result["status"] == "success"
+            assert result["output"] == "ArgoCD app list"
+            mock_execute.assert_called_once_with("argocd app list", timeout=300)
+
+
+@pytest.mark.asyncio
+async def test_execute_argocd_not_installed():
+    """Test the execute_argocd tool when argocd is not installed."""
+    # Mock CLI status to simulate argocd not installed
+    with patch("k8s_mcp_server.server.cli_status", {"argocd": False}):
+        # Test with argocd not installed
+        result = await execute_argocd(command="app list")
+
+        assert result["status"] == "error"
+        assert "not installed" in result["output"]

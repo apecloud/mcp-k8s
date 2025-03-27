@@ -78,9 +78,7 @@ class CommandTimeoutError(K8sMCPError):
         super().__init__(message, "TIMEOUT_ERROR", details)
 
 
-def create_error_result(
-    error: K8sMCPError, command: str | None = None, exit_code: int | None = None, stderr: str | None = None
-) -> CommandResult:
+def create_error_result(error: K8sMCPError, command: str | None = None, exit_code: int | None = None, stderr: str | None = None) -> CommandResult:
     """Create a CommandResult with error details from a K8sMCPError.
 
     Args:
@@ -107,16 +105,7 @@ def create_error_result(
             nested_details[key] = value
 
     # Create error details
-    error_details = ErrorDetails(
-        message=str(error),
-        code=error.code,
-        details=nested_details
-    )
+    error_details = ErrorDetails(message=str(error), code=error.code, details=nested_details)
 
     # Create command result
-    return CommandResult(
-        status="error",
-        output=str(error),
-        error=error_details,
-        exit_code=exit_code
-    )
+    return CommandResult(status="error", output=str(error), error=error_details, exit_code=exit_code)
