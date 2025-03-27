@@ -9,6 +9,40 @@
 
 K8s MCP Server is a server for [Anthropic's MCP (Model Context Protocol)](https://www.anthropic.com/news/introducing-mcp) that allows running Kubernetes CLI tools such as `kubectl`, `istioctl`, `helm`, and `argocd` in a safe, containerized environment.
 
+## Overview
+
+K8s MCP Server acts as a secure bridge between language models (like Claude) and Kubernetes CLI tools. It enables language models to execute validated Kubernetes commands, retrieve command documentation, and process command output in a structured way.
+
+## Architecture
+
+K8s MCP Server is designed with a focus on security, performance, and extensibility. The system comprises the following core components:
+
+![K8s MCP Server Architecture](architecture-diagram.png)
+
+### Core Components
+
+1. **Server Component**: Central controller that initializes the MCP server, registers tools and prompts, and handles client requests.
+
+2. **Security Validator**: Checks command structure and content to prevent potentially dangerous operations, enforcing strict validation rules.
+
+3. **CLI Executor**: Manages command execution, timeout handling, and output processing for all Kubernetes CLI tools.
+
+4. **Tool-specific Handlers**: Specialized functions for each supported tool (kubectl, helm, istioctl, argocd) that provide appropriate command preprocessing and response formatting.
+
+5. **Prompt Templates**: Pre-defined natural language templates for common Kubernetes operations to improve language model interactions.
+
+### Command Execution Flow
+
+The following diagram illustrates how commands flow through the system:
+
+![Command Execution Flow](request-flow-diagram.png)
+
+1. The language model sends a command request via the MCP protocol.
+2. The server validates the command using security rules.
+3. If valid, the command is executed with the appropriate CLI tool.
+4. Results or errors are captured and formatted into a structured response.
+5. The response is returned to the language model.
+
 ## Features
 
 - Execute Kubernetes CLI commands securely with proper validation, timeouts and error handling
@@ -199,67 +233,11 @@ argocd app get my-app
 argocd app sync my-app
 ```
 
-## Security Considerations
+## Testing
 
-The server includes several safety features:
+K8s MCP Server includes comprehensive test coverage with both unit and integration tests. The testing architecture is designed to be lightweight, fast, and representative of real-world usage.
 
-- **Isolation**: When running in Docker, the server operates in an isolated container environment
-- **Read-only access**: Mount Kubernetes configuration as read-only (`-v ~/.kube:/home/appuser/.kube:ro`)
-- **Non-root execution**: All processes run as a non-root user inside the container
-- **Command validation**: Potentially dangerous commands require explicit resource names
-- **Context separation**: Automatic context and namespace injection for commands
-
-## Development
-
-### Setting Up the Development Environment
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/k8s-mcp-server.git
-cd k8s-mcp-server
-
-# Install uv (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Set up a virtual environment and install dependencies in one step with uv
-uv venv -p 3.13
-
-# Activate the virtual environment
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install in development mode
-uv pip install -e ".[dev]"
-
-# Alternatively, use the Makefile
-make dev-install
-```
-
-### Running Tests
-
-For unit tests (no Kubernetes cluster required):
-
-```bash
-# Run all unit tests only
-pytest -m unit
-# Or use the Makefile
-make test-unit
-
-# Run all tests (including both unit and integration)
-pytest
-# Or use the Makefile
-make test
-
-# Run specific test file
-pytest tests/unit/test_server.py
-
-# Run specific test function
-pytest tests/unit/test_server.py::test_describe_command
-
-# Run with coverage report 
-pytest -m unit --cov=k8s_mcp_server --cov-report=term-missing
-# Or use the Makefile
-make test-coverage
-```
+![Testing Architecture](testing-architecture.png)
 
 ### Running Integration Tests
 
@@ -448,20 +426,6 @@ k3d cluster create k8s-mcp-test
 kubectl get nodes
 ```
 
-### Integration Test Process
-
-Integration tests validate the functionality of k8s-mcp-server against a real Kubernetes cluster. They:
-
-1. Verify that CLI tools work correctly when executed through the server
-2. Test namespace creation and management
-3. Deploy test pods to verify resource creation works
-4. Test help text retrieval for commands
-5. Verify tool-specific features (kubectl, helm, etc.)
-
-Integration tests are automatically skipped if:
-- No Kubernetes cluster is available
-- Required CLI tools (kubectl, helm, etc.) aren't installed
-
 #### Environment Variables for Integration Tests
 
 You can customize the integration tests with these environment variables:
@@ -489,24 +453,6 @@ pytest -m integration
 export K8S_SKIP_CLEANUP=true
 pytest -m integration
 ```
-
-#### Troubleshooting Integration Tests
-
-1. **Authentication Issues**:
-   - Ensure your kubeconfig is properly set up
-   - Verify you can run `kubectl get pods` outside the tests
-
-2. **Cluster Connection Errors**:
-   - Check if your cluster is running with `kubectl cluster-info`
-   - Verify networking between your machine and the cluster
-
-3. **Permission Issues**:
-   - The tests require permissions to create resources
-   - Ensure your user/credentials have appropriate RBAC permissions
-
-4. **Tool Installation**:
-   - Some tests require specific tools like `helm`
-   - Skip specific tests if you don't have all tools installed
 
 #### Continuous Integration with GitHub Actions
 
@@ -536,36 +482,71 @@ KWOK (Kubernetes Without Kubelet) provides significant advantages for testing Ku
 
 Since our integration tests primarily validate command formation, execution, and output parsing rather than actual workload behavior, KWOK provides an ideal balance of fidelity and efficiency.
 
-## Building from Source
+## Security Considerations
 
-### Building the Docker Image
+The server includes several safety features:
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/k8s-mcp-server.git
-cd k8s-mcp-server
+- **Isolation**: When running in Docker, the server operates in an isolated container environment
+- **Read-only access**: Mount Kubernetes configuration as read-only (`-v ~/.kube:/home/appuser/.kube:ro`)
+- **Non-root execution**: All processes run as a non-root user inside the container
+- **Command validation**: Potentially dangerous commands require explicit resource names
+- **Context separation**: Automatic context and namespace injection for commands
 
-# Build the image
-docker build -t k8s-mcp-server -f deploy/docker/Dockerfile .
+## For Contributors
 
-# For multi-architecture builds
-docker buildx create --name mybuilder --use
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t yourusername/k8s-mcp-server:latest \
-  -f deploy/docker/Dockerfile .
+If you're interested in contributing to K8s MCP Server, here's an overview of the project structure:
+
+### Project Structure
+
+```
+k8s-mcp-server/
+├── src/
+│   └── k8s_mcp_server/
+│       ├── server.py       # MCP server initialization and tool registration
+│       ├── cli_executor.py # Command execution and process management
+│       ├── security.py     # Command validation and security rules
+│       ├── tools.py        # Shared utilities and data structures
+│       └── prompts.py      # Prompt templates for common operations
+├── tests/
+│   ├── unit/               # Unit tests (no K8s cluster required)
+│   └── integration/        # Integration tests (requires K8s cluster or KWOK)
+└── deploy/
+    └── docker/             # Docker deployment configuration
 ```
 
-## Contributing
+### Development Workflow
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. **Setup Development Environment**:
+   ```bash
+   git clone https://github.com/yourusername/k8s-mcp-server.git
+   cd k8s-mcp-server
+   uv venv -p 3.13
+   source .venv/bin/activate
+   uv pip install -e ".[dev]"
+   ```
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. **Run Tests**:
+   ```bash
+   # Unit tests
+   pytest -m unit
+   
+   # Integration tests (using KWOK)
+   pytest -m integration
+   ```
 
-Please make sure your code passes the existing tests and linting. Add new tests for new functionality.
+3. **Submit Pull Requests**:
+   - Fork the repository
+   - Create your feature branch (`git checkout -b feature/amazing-feature`)
+   - Commit your changes (`git commit -m 'Add some amazing feature'`)
+   - Push to the branch (`git push origin feature/amazing-feature`)
+   - Open a Pull Request
+
+### Contribution Guidelines
+
+- Follow existing code style and patterns
+- Add tests for new functionality
+- Update documentation when making significant changes
+- Keep security as a primary consideration
 
 ## License
 
