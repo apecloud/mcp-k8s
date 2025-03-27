@@ -23,15 +23,24 @@ from k8s_mcp_server.security import is_safe_exec_command, validate_k8s_command, 
 
 def test_is_safe_exec_command():
     """Test the is_safe_exec_command function."""
+    # Test basic functionality - detailed edge cases are in test_security.py
     # Safe exec commands
-    assert is_safe_exec_command("kubectl exec pod-name -- ls") is True
-    assert is_safe_exec_command("kubectl exec -it pod-name -- /bin/bash -c 'ls -la'") is True
-    assert is_safe_exec_command("kubectl exec pod-name -c container -- echo hello") is True
+    assert is_safe_exec_command("kubectl exec pod-name -- ls") is True  # Non-shell command
+    assert is_safe_exec_command("kubectl exec -it pod-name -- /bin/bash -c 'ls -la'") is True  # Shell with command
+    assert is_safe_exec_command("kubectl exec pod-name -c container -- echo hello") is True  # Non-shell command
 
-    # These commands are considered safe by the current implementation
-    # but the test expects them to be unsafe
-    assert is_safe_exec_command("kubectl exec pod-name -- /bin/bash") is True
-    assert is_safe_exec_command("kubectl exec pod-name -- sh") is True
+    # Interactive shells are considered safe if explicitly requested
+    assert is_safe_exec_command("kubectl exec -it pod-name -- /bin/bash") is True
+    assert is_safe_exec_command("kubectl exec -ti pod-name -- sh") is True
+
+    # Unsafe exec commands - shells without explicit interactive mode or command
+    assert is_safe_exec_command("kubectl exec pod-name -- /bin/bash") is False
+    assert is_safe_exec_command("kubectl exec pod-name -- sh") is False
+
+    # Help/version commands are always safe
+    assert is_safe_exec_command("kubectl exec --help") is True
+    assert is_safe_exec_command("kubectl exec -h") is True
+    assert is_safe_exec_command("kubectl exec version") is True
 
     # Non-exec commands should always be safe
     assert is_safe_exec_command("kubectl get pods") is True
@@ -44,9 +53,7 @@ def test_inject_context_namespace():
     with patch("k8s_mcp_server.cli_executor.K8S_CONTEXT", "test-context"):
         with patch("k8s_mcp_server.cli_executor.K8S_NAMESPACE", "test-namespace"):
             # Basic kubectl command should get both context and namespace
-            assert "kubectl --context=test-context --namespace=test-namespace get pods" == inject_context_namespace(
-                "kubectl get pods"
-            )
+            assert "kubectl --context=test-context --namespace=test-namespace get pods" == inject_context_namespace("kubectl get pods")
 
             # Command with explicit namespace should not get namespace injected
             # Adjust assert based on actual implementation behavior
@@ -76,23 +83,23 @@ def test_inject_context_namespace():
             assert "--context=test-context" in actual
             assert "analyze" in actual
             # The actual implementation may or may not add namespace for this command
-            
+
             # Test with combined short flags
             actual = inject_context_namespace("kubectl get pods -n default -l app=nginx")
             assert "-n" in actual
             assert "--context=test-context" in actual
-            
+
             # Test with -A flag (all namespaces)
             actual = inject_context_namespace("kubectl get pods -A")
             assert "-A" in actual
             assert "--context=test-context" in actual
             assert "--namespace=" not in actual
-            
+
             # Test with cluster-scoped command
             actual = inject_context_namespace("kubectl api-resources")
             assert "--context=test-context" in actual
             assert "--namespace=" not in actual
-            
+
             # Test with invalid command format
             with patch("k8s_mcp_server.cli_executor.logger") as mock_logger:
                 actual = inject_context_namespace('kubectl get pods "unclosed quote')
@@ -122,17 +129,17 @@ def test_is_auth_error():
 def test_get_tool_from_command():
     """Test extracting CLI tool from command string."""
     from k8s_mcp_server.cli_executor import get_tool_from_command
-    
+
     # Test valid commands
     assert get_tool_from_command("kubectl get pods") == "kubectl"
     assert get_tool_from_command("helm list") == "helm"
     assert get_tool_from_command("istioctl analyze") == "istioctl"
     assert get_tool_from_command("argocd app list") == "argocd"
-    
+
     # Test commands with quotes and options
     assert get_tool_from_command('kubectl get pods -n "my namespace"') == "kubectl"
     assert get_tool_from_command("helm upgrade --install myrelease mychart") == "helm"
-    
+
     # Test invalid commands
     assert get_tool_from_command("invalid-command arg") is None
     assert get_tool_from_command("") is None
@@ -233,6 +240,7 @@ async def test_execute_command_success():
                 assert result["output"] == "Success output"
                 mock_subprocess.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_execute_command_error():
     """Test command execution error."""
@@ -249,13 +257,14 @@ async def test_execute_command_error():
             with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
                 with pytest.raises(CommandExecutionError) as exc_info:
                     await execute_command("kubectl get pods")
-                
+
                 assert "Error message" in str(exc_info.value)
                 assert exc_info.value.code == "EXECUTION_ERROR"
                 assert "command" in exc_info.value.details
                 assert exc_info.value.details["command"] == "kubectl get pods"
                 assert "exit_code" in exc_info.value.details
                 assert exc_info.value.details["exit_code"] == 1
+
 
 @pytest.mark.asyncio
 async def test_execute_command_auth_error():
@@ -273,18 +282,18 @@ async def test_execute_command_auth_error():
             with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
                 with pytest.raises(AuthenticationError) as exc_info:
                     await execute_command("kubectl get pods")
-                
+
                 assert "Authentication error" in str(exc_info.value)
                 assert "kubeconfig" in str(exc_info.value)
                 assert exc_info.value.code == "AUTH_ERROR"
                 assert "command" in exc_info.value.details
                 assert exc_info.value.details["command"] == "kubectl get pods"
-                
+
     # Test auth errors for different CLI tools
     for cli_tool, error_msg in [
         ("helm", "Please check your Helm repository configuration"),
         ("istioctl", "Please check your Istio configuration"),
-        ("argocd", "Please check your ArgoCD login status")
+        ("argocd", "Please check your ArgoCD login status"),
     ]:
         with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_subprocess:
             # Mock a process that returns auth error
@@ -295,14 +304,14 @@ async def test_execute_command_auth_error():
 
             # Mock validation and context injection
             with patch("k8s_mcp_server.cli_executor.validate_command"):
-                with patch("k8s_mcp_server.cli_executor.inject_context_namespace", 
-                          return_value=f"{cli_tool} list"):
+                with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value=f"{cli_tool} list"):
                     with pytest.raises(AuthenticationError) as exc_info:
                         await execute_command(f"{cli_tool} list")
-                    
+
                     assert "Authentication error" in str(exc_info.value)
                     assert error_msg in str(exc_info.value)
                     assert exc_info.value.code == "AUTH_ERROR"
+
 
 @pytest.mark.asyncio
 async def test_execute_command_timeout():
@@ -336,6 +345,7 @@ async def test_execute_command_timeout():
                 # Verify process was killed
                 process_mock.kill.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_execute_command_with_pipe():
     """Test pipe command execution using execute_command."""
@@ -345,31 +355,26 @@ async def test_execute_command_with_pipe():
             # Setup process mock
             process_mock = AsyncMock()
             process_mock.returncode = 0
-            process_mock.communicate = AsyncMock(
-                return_value=(b"Command output", b"")
-            )
+            process_mock.communicate = AsyncMock(return_value=(b"Command output", b""))
             mock_subprocess.return_value = process_mock
 
             # Mock context injection
-            with patch(
-                "k8s_mcp_server.cli_executor.inject_context_namespace",
-                return_value="kubectl get pods --context=test"
-                ):
-                    # Test with a pipe command
-                    result = await execute_command("kubectl get pods | grep nginx")
+            with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods --context=test"):
+                # Test with a pipe command
+                result = await execute_command("kubectl get pods | grep nginx")
 
-                    assert result["status"] == "success"
-                    assert result["output"] == "Command output"
+                assert result["status"] == "success"
+                assert result["output"] == "Command output"
 
-                    # Just verify that subprocess was called
-                    mock_subprocess.assert_called_once()
+                # Just verify that subprocess was called
+                mock_subprocess.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_execute_command_output_truncation():
     """Test output truncation when exceeding MAX_OUTPUT_SIZE."""
     large_output = "a" * 150000  # 150KB
-    with patch('asyncio.create_subprocess_shell') as mock_subprocess:
+    with patch("asyncio.create_subprocess_shell") as mock_subprocess:
         process_mock = AsyncMock()
         process_mock.returncode = 0
         process_mock.communicate.return_value = (large_output.encode(), b"")
@@ -411,28 +416,36 @@ async def test_execute_command_process_kill_error():
                 with patch("k8s_mcp_server.cli_executor.logger") as mock_logger:
                     with pytest.raises(CommandTimeoutError) as exc_info:
                         await execute_command("kubectl get pods", timeout=1)
-                    
+
                     # Check error details
                     assert "timed out" in str(exc_info.value).lower()
                     assert exc_info.value.code == "TIMEOUT_ERROR"
-                    
+
                     # Verify error logging when kill fails
                     mock_logger.error.assert_called_once()
 
-@pytest.mark.parametrize("command, expected", [
-    ("kubectl exec pod -- ls", True),
-    ("kubectl exec pod -- /bin/bash", True),  # Should still be allowed
-    ("kubectl delete", False),
-    ("helm uninstall", False),
-])
+
+@pytest.mark.parametrize(
+    "command, expected",
+    [
+        ("kubectl exec pod -- ls", True),
+        ("kubectl exec pod -- /bin/bash", False),  # Should now be blocked
+        ("kubectl exec -it pod -- /bin/bash", True),  # Explicit interactive mode is allowed
+        ("kubectl exec pod -- /bin/bash -c 'ls'", True),  # With -c flag is allowed
+        ("kubectl delete", False),
+        ("helm uninstall", False),
+    ],
+)
 def test_security_validation(command, expected):
     """Test security validation edge cases."""
     from k8s_mcp_server.security import validate_command
+
     if expected:
         validate_command(command)
     else:
         with pytest.raises(ValueError):
             validate_command(command)
+
 
 @pytest.mark.asyncio
 async def test_get_command_help():
@@ -464,6 +477,7 @@ async def test_get_command_help():
 
     # Test with auth error
     from k8s_mcp_server.errors import AuthenticationError
+
     with patch("k8s_mcp_server.cli_executor.execute_command", side_effect=AuthenticationError("Auth failed")):
         result = await get_command_help("kubectl", "get")
 
@@ -473,6 +487,7 @@ async def test_get_command_help():
 
     # Test with timeout error
     from k8s_mcp_server.errors import CommandTimeoutError
+
     with patch("k8s_mcp_server.cli_executor.execute_command", side_effect=CommandTimeoutError("Command timed out")):
         result = await get_command_help("kubectl", "get")
 
@@ -487,7 +502,7 @@ async def test_get_command_help():
         assert "Error retrieving help" in result.help_text
         assert result.status == "error"
         assert result.error["code"] == "INTERNAL_ERROR"
-        
+
     # Test with unsupported CLI tool
     result = await get_command_help("unsupported_tool", "get")
     assert "Unsupported CLI tool" in result.help_text

@@ -55,8 +55,8 @@ async def test_describe_kubectl_with_error(mock_k8s_cli_status):
         assert hasattr(result, "help_text")
         assert "Error retrieving" in result.help_text
         assert "Test error" in result.help_text
-        
-        
+
+
 @pytest.mark.asyncio
 async def test_describe_kubectl_tool_not_installed():
     """Test describe_kubectl when kubectl is not installed."""
@@ -65,9 +65,9 @@ async def test_describe_kubectl_tool_not_installed():
     with patch("k8s_mcp_server.server.cli_status", mock_status):
         # Create a mock context for testing ctx parameter
         mock_context = AsyncMock()
-        
+
         result = await describe_kubectl(command="get", ctx=mock_context)
-        
+
         assert "not installed" in result.help_text
         mock_context.error.assert_called_once()
 
@@ -163,15 +163,19 @@ async def test_tool_command_preprocessing(mock_execute_command, mock_k8s_cli_sta
         called_command = mock_execute_command.call_args[0][0]
         assert called_command == "kubectl get pods"
 
+
 def test_server_initialization():
     """Test server startup and prompt registration."""
     from k8s_mcp_server.server import mcp
+
     # Only verify that the server has been created with the correct name
     assert mcp.name == "K8s MCP Server"
     # Verify the existence of tool functions separately
     from k8s_mcp_server.server import describe_kubectl, execute_kubectl
+
     assert callable(describe_kubectl)
     assert callable(execute_kubectl)
+
 
 @pytest.mark.asyncio
 async def test_concurrent_command_execution(mock_k8s_cli_status):
@@ -190,19 +194,18 @@ async def test_concurrent_command_execution(mock_k8s_cli_status):
         assert all(r["status"] == "success" for r in results)
         assert mock_exec.call_count == 10
 
+
 @pytest.mark.asyncio
 async def test_long_running_command(mock_k8s_cli_status):
     """Test timeout handling for near-limit executions."""
     # Patch execute_command within the server module's scope
     with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_exec:
-        mock_exec.return_value = {
-            "status": "error",
-            "output": "Command timed out after 0.1 seconds"
-        }
+        mock_exec.return_value = {"status": "error", "output": "Command timed out after 0.1 seconds"}
         result = await execute_kubectl("get pods", timeout=0.1)
         assert "timed out" in result["output"].lower()
         # Check that the timeout value was passed correctly to the patched function
         mock_exec.assert_called_once_with("kubectl get pods", timeout=0.1)
+
 
 @pytest.mark.asyncio
 async def test_execute_kubectl_with_unexpected_error(mock_k8s_cli_status):
@@ -223,15 +226,15 @@ async def test_execute_kubectl_with_unexpected_error(mock_k8s_cli_status):
 async def test_execute_tool_command_tool_not_installed():
     """Test _execute_tool_command when the requested tool is not installed."""
     from k8s_mcp_server.server import _execute_tool_command
-    
+
     # Mock the CLI status dictionary to report tool as not installed
     mock_status = {"kubectl": True, "helm": False}
     with patch("k8s_mcp_server.server.cli_status", mock_status):
         # Create a mock context for testing ctx parameter
         mock_context = AsyncMock()
-        
+
         result = await _execute_tool_command(tool="helm", command="list", timeout=30, ctx=mock_context)
-        
+
         assert result["status"] == "error"
         assert "not installed" in result["output"]
         mock_context.error.assert_called_once()
@@ -240,20 +243,86 @@ async def test_execute_tool_command_tool_not_installed():
 @pytest.mark.asyncio
 async def test_execute_tool_command_with_field_info_timeout():
     """Test _execute_tool_command with a FieldInfo timeout parameter."""
-    from k8s_mcp_server.server import _execute_tool_command
     from pydantic import Field
-    
+
+    from k8s_mcp_server.server import _execute_tool_command
+
     # Create a Field object for timeout parameter
     timeout_field = Field(default=None)
-    
+
     # Mock CLI status and execute_command
     with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
         with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
             mock_execute.return_value = {"status": "success", "output": "Command succeeded"}
-            
+
             # Execute with FieldInfo timeout
             await _execute_tool_command(tool="kubectl", command="get pods", timeout=timeout_field, ctx=None)
-            
+
             # Verify execute_command was called with DEFAULT_TIMEOUT
             from k8s_mcp_server.config import DEFAULT_TIMEOUT
+
             mock_execute.assert_called_once_with("kubectl get pods", timeout=DEFAULT_TIMEOUT)
+
+
+@pytest.mark.parametrize(
+    "kubectl_installed,other_tools_installed",
+    [
+        (True, True),  # All tools installed
+        (True, False),  # Only kubectl installed
+    ],
+)
+def test_run_startup_checks(kubectl_installed, other_tools_installed):
+    """Test run_startup_checks with different installation scenarios."""
+    from k8s_mcp_server.config import SUPPORTED_CLI_TOOLS
+    from k8s_mcp_server.server import run_startup_checks
+
+    def mock_check_cli_installed_factory(kubectl_status, other_status):
+        """Create a mock for check_cli_installed."""
+
+        async def mock_check_cli_installed(cli_tool):
+            if cli_tool == "kubectl":
+                return kubectl_status
+            return other_status
+
+        return mock_check_cli_installed
+
+    mock_check = mock_check_cli_installed_factory(kubectl_installed, other_tools_installed)
+
+    with patch("k8s_mcp_server.server.check_cli_installed", new=AsyncMock(side_effect=mock_check)):
+        with patch("k8s_mcp_server.server.logger") as mock_logger:
+            # Run the function
+            result = run_startup_checks()
+
+            # Verify the result
+            assert "kubectl" in result
+            assert result["kubectl"] == kubectl_installed
+
+            # Check all other tools are in the result
+            for tool in SUPPORTED_CLI_TOOLS:
+                assert tool in result
+                if tool == "kubectl":
+                    assert result[tool] == kubectl_installed
+                else:
+                    assert result[tool] == other_tools_installed
+
+            # Verify logging
+            if kubectl_installed:
+                mock_logger.info.assert_any_call("kubectl is installed and available")
+            else:
+                mock_logger.warning.assert_any_call("kubectl is not installed or not in PATH")
+
+
+def test_run_startup_checks_kubectl_missing():
+    """Test run_startup_checks when kubectl is not installed."""
+    from k8s_mcp_server.server import run_startup_checks
+
+    async def mock_check_cli_installed(cli_tool):
+        return False  # All tools missing
+
+    with patch("k8s_mcp_server.server.check_cli_installed", new=AsyncMock(side_effect=mock_check_cli_installed)):
+        with patch("k8s_mcp_server.server.sys.exit") as mock_exit:
+            # Run the function
+            run_startup_checks()
+
+            # Verify sys.exit was called
+            mock_exit.assert_called_once_with(1)

@@ -98,8 +98,10 @@ class ValidationRule:
 def is_safe_exec_command(command: str) -> bool:
     """Check if a kubectl exec command is safe to execute.
 
-    We consider a kubectl exec command safe if it doesn't try to start an interactive shell
-    without explicit -it flags and doesn't use dangerous commands like bash/sh without args.
+    We consider a kubectl exec command safe if:
+    1. It's explicitly interactive (-it, -ti flags) and the user is aware of this
+    2. It executes a specific command rather than opening a general shell
+    3. It uses shells (bash/sh) only with specific commands (-c flag)
 
     Args:
         command: The kubectl exec command
@@ -110,22 +112,55 @@ def is_safe_exec_command(command: str) -> bool:
     if not command.startswith("kubectl exec"):
         return True  # Not an exec command
 
-    # Check for explicit interactive mode
-    has_interactive = "-i" in command or "--stdin" in command or "-it" in command or "-ti" in command
-
-    # Check for shell commands that might be used without proper args
-    dangerous_shell_patterns = [" -- sh", " -- bash", " -- /bin/sh", " -- /bin/bash"]
-
-    # If the shell command is followed by arguments (like -c 'command'), it's safe
-    if " -- /bin/bash -c " in command or " -- bash -c " in command or " -- sh -c " in command:
+    # Special cases: help and version are always safe
+    if " --help" in command or " -h" in command or " version" in command:
         return True
 
-    # Check for dangerous shells with no args
-    has_dangerous_shell = any(pattern in command + " " for pattern in dangerous_shell_patterns)
+    # Check for explicit interactive mode
+    has_interactive = any(flag in command for flag in [" -i ", " --stdin ", " -it ", " -ti ", " -t ", " --tty "])
 
-    # If interactive is explicitly requested AND not trying to just get a shell, it's safe
-    # Or if it's non-interactive (like running a specific command), it's safe
-    return (has_interactive and not has_dangerous_shell) or (not has_interactive)
+    # List of dangerous shell commands that should not be executed without arguments
+    dangerous_shell_patterns = [
+        " -- sh",
+        " -- bash",
+        " -- /bin/sh",
+        " -- /bin/bash",
+        " -- zsh",
+        " -- /bin/zsh",
+        " -- ksh",
+        " -- /bin/ksh",
+        " -- csh",
+        " -- /bin/csh",
+        " -- /usr/bin/bash",
+        " -- /usr/bin/sh",
+        " -- /usr/bin/zsh",
+        " -- /usr/bin/ksh",
+        " -- /usr/bin/csh",
+    ]
+
+    # Check if any of the dangerous shell patterns are present
+    has_shell_pattern = False
+    for pattern in dangerous_shell_patterns:
+        if pattern in command + " ":  # Add space to match end of command
+            has_shell_pattern = True
+            # If shell is used with -c flag to run a specific command, that's acceptable
+            if f"{pattern} -c " in command or f"{pattern.strip()} -c " in command:
+                return True
+
+    # Safe conditions:
+    # 1. Not using a shell at all
+    # 2. Interactive mode is explicitly requested (user knows they're getting a shell)
+    if not has_shell_pattern:
+        return True  # Not using a shell
+
+    if has_interactive and has_shell_pattern:
+        # If interactive is explicitly requested and using a shell,
+        # we consider it an intentional interactive shell request
+        return True
+
+    # Default: If using a shell without explicit command (-c) and not explicitly
+    # requesting interactive mode, consider it unsafe
+    return False
 
 
 def validate_k8s_command(command: str) -> None:
@@ -153,10 +188,7 @@ def validate_k8s_command(command: str) -> None:
     # Special case for kubectl exec
     if cli_tool == "kubectl" and "exec" in cmd_parts:
         if not is_safe_exec_command(command):
-            raise ValueError(
-                "Interactive shells via kubectl exec are restricted. "
-                "Use explicit commands or proper flags (-it, --command, etc)."
-            )
+            raise ValueError("Interactive shells via kubectl exec are restricted. Use explicit commands or proper flags (-it, --command, etc).")
 
     # Check against dangerous commands
     if cli_tool in DANGEROUS_COMMANDS:
@@ -169,8 +201,7 @@ def validate_k8s_command(command: str) -> None:
                         return  # Safe pattern match, allow command
 
                 raise ValueError(
-                    f"This command ({dangerous_cmd}) is restricted for safety reasons. "
-                    "Please use a more specific form with resource type and name."
+                    f"This command ({dangerous_cmd}) is restricted for safety reasons. Please use a more specific form with resource type and name."
                 )
 
     logger.debug(f"Command validation successful: {command}")
