@@ -15,13 +15,16 @@ format:
 	ruff format .
 
 test:
-	pytest -v
+	pytest -v -m 'not integration'
 
 test-unit:
 	pytest -v -m unit
 
 test-integration:
 	pytest -v -m integration 
+
+test-all:
+	pytest -v -o addopts=""
 
 test-coverage:
 	pytest --cov=k8s_mcp_server --cov-report=term-missing
@@ -56,7 +59,8 @@ help:
 	@echo "  dev-install     - Install the package with development dependencies using uv"
 	@echo "  lint            - Run linters (ruff)"
 	@echo "  format          - Format code with ruff"
-	@echo "  test            - Run all tests"
+	@echo "  test            - Run unit tests only (default)"
+	@echo "  test-all        - Run all tests including integration tests"
 	@echo "  test-unit       - Run unit tests only"
 	@echo "  test-integration - Run integration tests only (requires K8s)"
 	@echo "  test-coverage   - Run tests with coverage report"

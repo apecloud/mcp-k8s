@@ -371,6 +371,7 @@ async def test_describe_helm():
     with patch("k8s_mcp_server.server.cli_status", {"helm": True}):
         # Test with valid command
         from k8s_mcp_server.tools import CommandHelpResult
+
         with patch("k8s_mcp_server.server.get_command_help", new_callable=AsyncMock) as mock_help:
             mock_help.return_value = CommandHelpResult(help_text="Helm help text", status="success")
 
@@ -528,6 +529,7 @@ async def test_describe_istioctl():
     with patch("k8s_mcp_server.server.cli_status", {"istioctl": True}):
         # Test with valid command
         from k8s_mcp_server.tools import CommandHelpResult
+
         with patch("k8s_mcp_server.server.get_command_help", new_callable=AsyncMock) as mock_help:
             mock_help.return_value = CommandHelpResult(help_text="Istio help text", status="success")
 
@@ -586,6 +588,7 @@ async def test_describe_argocd():
     with patch("k8s_mcp_server.server.cli_status", {"argocd": True}):
         # Test with valid command
         from k8s_mcp_server.tools import CommandHelpResult
+
         with patch("k8s_mcp_server.server.get_command_help", new_callable=AsyncMock) as mock_help:
             mock_help.return_value = CommandHelpResult(help_text="ArgoCD help text", status="success")
 

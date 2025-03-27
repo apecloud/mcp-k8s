@@ -5,8 +5,9 @@
 - Install dependencies: `uv pip install -e .` (or use `make install`)
 - Install dev dependencies: `uv pip install -e ".[dev]"` (or use `make dev-install`)
 - Run server: `python -m k8s_mcp_server`
-- Run all tests: `pytest` (or use `make test`)
-- Run unit tests only: `pytest -m unit` (or use `make test-unit`)
+- Run unit tests only (default): `pytest` (or use `make test`)
+- Run all tests (including integration): `pytest -o addopts=""` (or use `make test-all`)
+- Run unit tests explicitly: `pytest -m unit` (or use `make test-unit`)
 - Run integration tests only: `pytest -m integration` (or use `make test-integration`)
 - Run single test: `pytest tests/path/to/test_file.py::test_function_name -v`
 - Run linter: `ruff check src/ tests/` (or use `make lint`)
