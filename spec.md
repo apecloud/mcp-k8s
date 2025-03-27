@@ -38,7 +38,7 @@ Retrieves help information for kubectl commands:
   "returns": {
     "help_text": "string",
     "status": "string",
-    "error": "string (if status is error)"
+    "error": "ErrorDetails | None"
   }
 }
 ```
@@ -84,11 +84,11 @@ Executes kubectl commands:
     }
   },
   "returns": {
-    "output": "string",
-    "error": "string",
     "status": "string",
-    "exit_code": "integer",
-    "execution_time": "number"
+    "output": "string",
+    "exit_code": "integer (optional)",
+    "execution_time": "number (optional)",
+    "error": "ErrorDetails (optional)"
   }
 }
 ```
@@ -139,6 +139,7 @@ The server provides capabilities for managing Kubernetes contexts:
 - Support context switching through command parameters
 - Clear error messages for authentication and context issues
 - Support for multi-cluster environments
+- Automatic context and namespace injection for kubectl and istioctl commands
 
 **Examples:**
 ```
@@ -164,6 +165,7 @@ Support for Unix command piping enhances functionality:
 - Text processing: `grep`, `sed`, `awk`, `cut`, `sort`, `uniq`, `wc`, `head`, `tail`
 - Data manipulation: `jq`, `yq`, `xargs`
 - File operations: `ls`, `cat`, `find`
+- And many other standard Unix utilities
 
 **Examples:**
 ```
@@ -187,59 +189,67 @@ The server follows a standard pattern for adding new Kubernetes-related CLI tool
 - Each tool provides its own documentation function
 - Each tool provides its own execution function
 
+### 7. Prompt Templates
+
+The server provides a collection of prompt templates for common Kubernetes operations:
+
+- Resource status checking
+- Application deployment
+- Troubleshooting
+- Resource inventory
+- Security analysis
+- And other common operational tasks
+
+**Available Prompt Templates:**
+- `k8s_resource_status`: Check status of Kubernetes resources
+- `k8s_deploy_application`: Deploy an application to Kubernetes
+- `k8s_troubleshoot`: Troubleshoot Kubernetes resources
+- `k8s_resource_inventory`: List all resources in cluster
+- `istio_service_mesh`: Manage Istio service mesh
+- `helm_chart_management`: Manage Helm charts
+- `argocd_application`: Manage ArgoCD applications
+- `k8s_security_check`: Security analysis for Kubernetes resources
+- `k8s_resource_scaling`: Scale Kubernetes resources
+- `k8s_logs_analysis`: Analyze logs from Kubernetes resources
+
+**Example Usage:**
+```
+k8s_resource_status(resource_type="pods", namespace="default")
+// Generates a prompt for checking pod status in the default namespace
+```
+
 ## Architecture
 
 ### Component Overview
 
 The Kubernetes MCP Server consists of these logical components:
 
-```
-┌─────────────────┐         ┌─────────────────┐
-│   MCP Client    │         │  MCP Interface  │
-│  (AI Assistant) │         │                 │
-└─────────────────┘         └────────┬────────┘
-        ▲                            │
-        │                            ▼
-        │                   ┌─────────────────┐
-        │                   │  Tool Commands  │
-        │                   │ (Execution and  │
-        │                   │ Documentation)  │
-        │                   └────────┬────────┘
-        │                            │
-        │                            ▼
-        │                   ┌─────────────────┐
-        │                   │Security Validator│
-        │                   └────────┬────────┘
-        │                            │
-        │                            ▼
-        │                   ┌─────────────────┐
-        │                   │  CLI Executor   │
-        │                   └────────┬────────┘
-        │                            │
-        └────────────────────────────┘
+```mermaid
+flowchart TD
+    A[MCP Client\nAI Assistant] <--> |HTTP/WebSocket| B[FastMCP Server]
+    B --> C[Tool Commands\n& Validation]
+    C --> D[CLI Executor]
 ```
 
 ### Component Responsibilities
 
-1. **MCP Interface**
+1. **FastMCP Server**
    - Implements MCP protocol endpoints
    - Handles tool requests and responses
-   - Manages client connections and capability negotiation
+   - Manages client connections
+   - Registers prompt templates
 
-2. **Tool Commands**
+2. **Tool Commands & Validation**
    - Processes documentation requests
    - Processes execution requests
+   - Validates commands against security policies
    - Validates parameters and formats responses
 
-3. **Security Validator**
-   - Validates commands against security policies
-   - Checks for prohibited operations
-   - Enforces command restrictions
-
-4. **CLI Executor**
+3. **CLI Executor**
    - Executes CLI commands securely
    - Captures standard output and error streams
-   - Handles timeouts and resource limitations
+   - Handles timeouts
+   - Injects context and namespace when appropriate
 
 ### Security Model
 
@@ -249,16 +259,17 @@ Security principles for the Kubernetes MCP Server include:
    - Allowlist-based approach for permitted commands
    - Validation of all command inputs against injection attacks
    - Pipe chain validation for authorized utilities only
+   - Specific validation for potentially dangerous commands like `kubectl exec`
 
 2. **Execution Security**
-   - Resource limitations (CPU, memory, time)
-   - Restricted permissions for command execution
-   - Isolation of command execution environments
+   - Execution timeouts to prevent resource exhaustion
+   - Proper handling of command errors and timeouts
+   - Secure subprocess execution
 
 3. **Authentication Security**
-   - Read-only access to kubeconfig
+   - Basic detection of authentication errors
+   - Appropriate error messages for authentication issues
    - No storage of sensitive credentials
-   - Validation of authentication contexts
 
 ### Error Handling Framework
 
@@ -268,23 +279,30 @@ A consistent error handling approach ensures clear communication:
    - Command validation errors
    - Authentication errors
    - Execution errors
-   - Resource errors
+   - Timeout errors
    - Internal system errors
 
 2. **Standard Error Format**
-   ```json
-   {
-     "status": "error",
-     "error": {
-       "message": "Clear error message",
-       "code": "ERROR_CODE",
-       "details": {
-         "command": "original command",
-         "exit_code": 1,
-         "stderr": "detailed error output"
-       }
-     }
-   }
+   ```typescript
+   type ErrorDetailsNested = {
+     command?: string;
+     exit_code?: number;
+     stderr?: string;
+   };
+
+   type ErrorDetails = {
+     message: string;
+     code: string;
+     details?: ErrorDetailsNested;
+   };
+
+   type CommandResult = {
+     status: "success" | "error";
+     output: string;
+     exit_code?: number;
+     execution_time?: number;
+     error?: ErrorDetails;
+   };
    ```
 
 3. **Common Error Messages**
@@ -301,11 +319,12 @@ Configuration for the Kubernetes MCP Server follows these principles:
    - Server settings (host, port, logging)
    - Tool settings (paths, allowed commands)
    - Security settings (restrictions, allowed pipes)
-   - Authentication settings (kubeconfig handling)
+   - Timeout settings (default and maximum)
+   - Context and namespace settings
 
 2. **Configuration Layering**
    - Default sensible configurations built-in
-   - Configuration overrides through external means
+   - Configuration overrides through environment variables
    - Environment-specific settings
 
 ## Conclusion
@@ -314,4 +333,4 @@ This Kubernetes MCP Server specification outlines a focused approach to providin
 
 The design prioritizes tool-specific commands rather than generic interfaces, enabling clearer usage patterns and more robust parameter validation. The security model focuses on principles rather than implementation details, allowing for various secure implementations. The error handling framework ensures consistent and clear communication of issues to clients.
 
-By removing implementation details like directory structures, deployment configurations, and specific code examples, this specification serves as a conceptual guide that can be implemented in various programming languages and deployment environments.
+Additional features like automatic context/namespace injection and prompt templates enhance the usability and value of the server for AI assistant interactions with Kubernetes environments.
