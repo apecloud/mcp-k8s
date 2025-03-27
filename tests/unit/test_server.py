@@ -55,6 +55,21 @@ async def test_describe_kubectl_with_error(mock_k8s_cli_status):
         assert hasattr(result, "help_text")
         assert "Error retrieving" in result.help_text
         assert "Test error" in result.help_text
+        
+        
+@pytest.mark.asyncio
+async def test_describe_kubectl_tool_not_installed():
+    """Test describe_kubectl when kubectl is not installed."""
+    # Mock the CLI status dictionary to report kubectl as not installed
+    mock_status = {"kubectl": False}
+    with patch("k8s_mcp_server.server.cli_status", mock_status):
+        # Create a mock context for testing ctx parameter
+        mock_context = AsyncMock()
+        
+        result = await describe_kubectl(command="get", ctx=mock_context)
+        
+        assert "not installed" in result.help_text
+        mock_context.error.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -200,3 +215,43 @@ async def test_execute_kubectl_with_unexpected_error(mock_k8s_cli_status):
         assert "output" in result
         assert result["status"] == "error"
         assert "Unexpected error" in result["output"]
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_command_tool_not_installed():
+    """Test _execute_tool_command when the requested tool is not installed."""
+    from k8s_mcp_server.server import _execute_tool_command
+    
+    # Mock the CLI status dictionary to report tool as not installed
+    mock_status = {"kubectl": True, "helm": False}
+    with patch("k8s_mcp_server.server.cli_status", mock_status):
+        # Create a mock context for testing ctx parameter
+        mock_context = AsyncMock()
+        
+        result = await _execute_tool_command(tool="helm", command="list", timeout=30, ctx=mock_context)
+        
+        assert result["status"] == "error"
+        assert "not installed" in result["output"]
+        mock_context.error.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_command_with_field_info_timeout():
+    """Test _execute_tool_command with a FieldInfo timeout parameter."""
+    from k8s_mcp_server.server import _execute_tool_command
+    from pydantic import Field
+    
+    # Create a Field object for timeout parameter
+    timeout_field = Field(default=None)
+    
+    # Mock CLI status and execute_command
+    with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.return_value = {"status": "success", "output": "Command succeeded"}
+            
+            # Execute with FieldInfo timeout
+            await _execute_tool_command(tool="kubectl", command="get pods", timeout=timeout_field, ctx=None)
+            
+            # Verify execute_command was called with DEFAULT_TIMEOUT
+            from k8s_mcp_server.config import DEFAULT_TIMEOUT
+            mock_execute.assert_called_once_with("kubectl get pods", timeout=DEFAULT_TIMEOUT)

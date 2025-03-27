@@ -1,5 +1,6 @@
 """Tests for the CLI executor module."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -71,6 +72,28 @@ def test_inject_context_namespace():
             assert "--context=test-context" in actual
             assert "analyze" in actual
             # The actual implementation may or may not add namespace for this command
+            
+            # Test with combined short flags
+            actual = inject_context_namespace("kubectl get pods -n default -l app=nginx")
+            assert "-n" in actual
+            assert "--context=test-context" in actual
+            
+            # Test with -A flag (all namespaces)
+            actual = inject_context_namespace("kubectl get pods -A")
+            assert "-A" in actual
+            assert "--context=test-context" in actual
+            assert "--namespace=" not in actual
+            
+            # Test with cluster-scoped command
+            actual = inject_context_namespace("kubectl api-resources")
+            assert "--context=test-context" in actual
+            assert "--namespace=" not in actual
+            
+            # Test with invalid command format
+            with patch("k8s_mcp_server.cli_executor.logger") as mock_logger:
+                actual = inject_context_namespace('kubectl get pods "unclosed quote')
+                mock_logger.warning.assert_called_once()
+                assert actual == 'kubectl get pods "unclosed quote'
 
 
 def test_is_auth_error():
@@ -80,10 +103,35 @@ def test_is_auth_error():
     assert is_auth_error("Unauthorized") is True
     assert is_auth_error("Error: You must be logged in to the server (Unauthorized)") is True
     assert is_auth_error("Error: Error loading config file") is True
+    assert is_auth_error("forbidden") is True
+    assert is_auth_error("Invalid kubeconfig") is True
+    assert is_auth_error("Unable to load authentication") is True
+    assert is_auth_error("no configuration has been provided") is True
+    assert is_auth_error("You must be logged in") is True
+    assert is_auth_error("Error: Helm repo") is True
 
     # Test non-authentication errors
     assert is_auth_error("Pod not found") is False
     assert is_auth_error("No resources found") is False
+
+
+def test_get_tool_from_command():
+    """Test extracting CLI tool from command string."""
+    from k8s_mcp_server.cli_executor import get_tool_from_command
+    
+    # Test valid commands
+    assert get_tool_from_command("kubectl get pods") == "kubectl"
+    assert get_tool_from_command("helm list") == "helm"
+    assert get_tool_from_command("istioctl analyze") == "istioctl"
+    assert get_tool_from_command("argocd app list") == "argocd"
+    
+    # Test commands with quotes and options
+    assert get_tool_from_command('kubectl get pods -n "my namespace"') == "kubectl"
+    assert get_tool_from_command("helm upgrade --install myrelease mychart") == "helm"
+    
+    # Test invalid commands
+    assert get_tool_from_command("invalid-command arg") is None
+    assert get_tool_from_command("") is None
 
 
 def test_validate_k8s_command():
@@ -219,6 +267,29 @@ async def test_execute_command_auth_error():
                 assert result["status"] == "error"
                 assert "Authentication error" in result["output"]
                 assert "kubeconfig" in result["output"]
+                
+    # Test auth errors for different CLI tools
+    for cli_tool, error_msg in [
+        ("helm", "Please check your Helm repository configuration"),
+        ("istioctl", "Please check your Istio configuration"),
+        ("argocd", "Please check your ArgoCD login status")
+    ]:
+        with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_subprocess:
+            # Mock a process that returns auth error
+            process_mock = AsyncMock()
+            process_mock.returncode = 1
+            process_mock.communicate.return_value = (b"", b"Unauthorized")
+            mock_subprocess.return_value = process_mock
+
+            # Mock validation and context injection
+            with patch("k8s_mcp_server.cli_executor.validate_command"):
+                with patch("k8s_mcp_server.cli_executor.inject_context_namespace", 
+                          return_value=f"{cli_tool} list"):
+                    result = await execute_command(f"{cli_tool} list")
+
+                    assert result["status"] == "error"
+                    assert "Authentication error" in result["output"]
+                    assert error_msg in result["output"]
 
 @pytest.mark.asyncio
 async def test_execute_command_timeout():
@@ -291,6 +362,44 @@ async def test_execute_command_output_truncation():
             assert "truncated" in result["output"]
             assert len(result["output"]) <= 100000 + len("\n... (output truncated)")
 
+
+@pytest.mark.asyncio
+async def test_execute_command_cancelled():
+    """Test handling of CancelledError in execute_command."""
+    with patch("k8s_mcp_server.cli_executor.validate_command"):
+        with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
+            with patch("asyncio.create_subprocess_shell", side_effect=asyncio.CancelledError()):
+                with pytest.raises(asyncio.CancelledError):
+                    await execute_command("kubectl get pods")
+
+
+@pytest.mark.asyncio
+async def test_execute_command_process_kill_error():
+    """Test handling errors when killing a process during timeout."""
+    with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_subprocess:
+        # Mock a process that times out
+        process_mock = AsyncMock()
+        # Use a properly awaitable mock that raises TimeoutError
+        communicate_mock = AsyncMock(side_effect=TimeoutError())
+        process_mock.communicate = communicate_mock
+        # Mock process.kill to raise an exception
+        process_mock.kill = MagicMock(side_effect=Exception("Failed to kill process"))
+        mock_subprocess.return_value = process_mock
+
+        # Mock validation function to avoid dependency
+        with patch("k8s_mcp_server.cli_executor.validate_command"):
+            # Mock context injection
+            with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
+                with patch("k8s_mcp_server.cli_executor.logger") as mock_logger:
+                    result = await execute_command("kubectl get pods", timeout=1)
+                    
+                    # Check error message in result
+                    assert result["status"] == "error"
+                    assert "timed out" in result["output"].lower()
+                    
+                    # Verify error logging when kill fails
+                    mock_logger.error.assert_called_once()
+
 @pytest.mark.parametrize("command, expected", [
     ("kubectl exec pod -- ls", True),
     ("kubectl exec pod -- /bin/bash", True),  # Should still be allowed
@@ -335,3 +444,8 @@ async def test_get_command_help():
         result = await get_command_help("kubectl", "get")
 
         assert "Error retrieving help" in result.help_text
+        
+    # Test with unsupported CLI tool
+    result = await get_command_help("unsupported_tool", "get")
+    assert "Unsupported CLI tool" in result.help_text
+    assert result.status == "error"

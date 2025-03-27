@@ -84,3 +84,36 @@ def test_prompt_templates():
     argocd_prompt = prompt_functions["argocd_application"]
     result = argocd_prompt("my-app")
     assert "for application 'my-app'" in result
+    assert "in the argocd namespace" in result
+    
+    # Test argocd_application prompt without app name
+    result = argocd_prompt()
+    assert "for all applications" in result
+    
+    # Test k8s_security_check prompt with namespace
+    security_prompt = prompt_functions["k8s_security_check"]
+    result = security_prompt("production")
+    assert "in the production namespace" in result
+    
+    # Test k8s_security_check prompt without namespace (all namespaces)
+    result = security_prompt()
+    assert "across the entire cluster" in result
+    
+    # Test k8s_resource_scaling prompt
+    scaling_prompt = prompt_functions["k8s_resource_scaling"]
+    result = scaling_prompt("deployment", "api-server", "services")
+    assert "scale the deployment" in result
+    assert "named 'api-server'" in result
+    assert "in the services namespace" in result
+    
+    # Test k8s_logs_analysis prompt with container
+    logs_prompt = prompt_functions["k8s_logs_analysis"]
+    result = logs_prompt("backend", "app", "api")
+    assert "container 'api' in" in result
+    assert "pod 'backend'" in result
+    assert "in the app namespace" in result
+    
+    # Test k8s_logs_analysis prompt without container
+    result = logs_prompt("backend", "app")
+    assert "container" not in result
+    assert "pod 'backend'" in result
