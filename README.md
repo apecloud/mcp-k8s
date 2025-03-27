@@ -263,32 +263,100 @@ make test-coverage
 
 ### Running Integration Tests
 
-Integration tests require a functioning Kubernetes cluster. You can either use an existing cluster or set up a local one.
+Integration tests validate the command execution and response handling of k8s-mcp-server. By default, the tests use KWOK (Kubernetes Without Kubelet) to create a lightweight simulated Kubernetes cluster for testing.
 
-#### Option 1: Using an Existing Kubernetes Cluster
+#### Prerequisites
 
-The simplest approach is to use an existing Kubernetes cluster by specifying which context to use:
+Integration tests require:
+- `kubectl` installed and in your PATH
+- `kwokctl` installed for the default KWOK-based testing (see below)
+- Optional: `helm` for Helm-related tests
+- Optional: A real Kubernetes cluster for advanced testing scenarios
+
+#### Option 1: Using KWOK (Recommended)
+
+[KWOK (Kubernetes Without Kubelet)](https://kwok.sigs.k8s.io/) provides a lightweight simulation of a Kubernetes cluster without requiring actual node or container execution. This is the default and recommended approach for running the integration tests.
+
+1. **Install KWOK**:
+   ```bash
+   # For macOS with Homebrew:
+   brew install kwokctl
+   
+   # For Linux or manual installation:
+   KWOK_VERSION=$(curl -s https://api.github.com/repos/kubernetes-sigs/kwok/releases/latest | grep tag_name | cut -d '"' -f 4)
+   curl -Lo kwokctl https://github.com/kubernetes-sigs/kwok/releases/download/${KWOK_VERSION}/kwokctl-$(go env GOOS)-$(go env GOARCH)
+   curl -Lo kwok https://github.com/kubernetes-sigs/kwok/releases/download/${KWOK_VERSION}/kwok-$(go env GOOS)-$(go env GOARCH)
+   chmod +x kwokctl kwok
+   sudo mv kwokctl kwok /usr/local/bin/
+   ```
+
+2. **Run Integration Tests**:
+   ```bash
+   # Run all integration tests (KWOK cluster will be created automatically)
+   pytest tests/integration -v
+   
+   # Run specific test
+   pytest tests/integration/test_k8s_tools.py::test_kubectl_version -v
+   
+   # Skip cleanup of KWOK cluster for debugging
+   K8S_SKIP_CLEANUP=true pytest tests/integration -v
+   ```
+
+The test framework will:
+1. Automatically create a KWOK cluster for your tests
+2. Run all integration tests against this cluster
+3. Delete the cluster when tests complete (unless `K8S_SKIP_CLEANUP=true`)
+
+Benefits of using KWOK:
+- Extremely lightweight (no real containers or nodes)
+- Fast startup and shutdown (seconds vs. minutes)
+- Consistent and reproducible test environment
+- No external dependencies or complex infrastructure
+
+#### Option 2: Using Rancher Desktop
+
+If you need to test against a real Kubernetes implementation, [Rancher Desktop](https://rancherdesktop.io/) provides a convenient way to run Kubernetes locally:
+
+1. **Enable Kubernetes in Rancher Desktop**:
+   - Open Rancher Desktop
+   - Go to Preferences → Kubernetes
+   - Ensure Kubernetes is enabled and running
+
+2. **Configure Environment Variables**:
+   ```bash
+   # Required: Tell tests to use your existing cluster instead of KWOK
+   export K8S_MCP_TEST_USE_EXISTING_CLUSTER=true
+   
+   # Optional: Specify Rancher Desktop context
+   export K8S_CONTEXT=rancher-desktop
+   
+   # Optional: Skip cleanup of test namespaces
+   export K8S_SKIP_CLEANUP=true
+   ```
+
+3. **Run Integration Tests**:
+   ```bash
+   pytest tests/integration -v
+   ```
+
+#### Option 3: Using Another Existing Kubernetes Cluster
+
+For testing against production-like environments or specific Kubernetes distributions:
 
 ```bash
-# Run integration tests with the currently active context
+# Set required environment variables
+export K8S_MCP_TEST_USE_EXISTING_CLUSTER=true
+
+# Optionally specify a context
+export K8S_CONTEXT=my-cluster-context
+
+# Run the tests
 pytest -m integration
-# Or use the Makefile
-make test-integration
-
-# Run with a specific context
-K8S_CONTEXT=my-cluster-context pytest -m integration
-
-# Run specific integration test file
-pytest tests/integration/test_k8s_tools.py
 ```
 
-Benefits of this approach:
-- No need to set up a separate cluster for testing
-- Works with any Kubernetes distribution (EKS, GKE, AKS, k3s, k0s, etc.)
-- Tests run against the same environment you're developing for
-- Faster test execution since there's no cluster setup/teardown
+This approach works with any Kubernetes distribution (EKS, GKE, AKS, k3s, k0s, etc.).
 
-#### Option 2: Setting Up a Local Kubernetes Cluster for Development
+#### Option 4: Setting Up a Local Kubernetes Cluster for Development
 
 For local development, we recommend setting up a lightweight Kubernetes cluster:
 
@@ -400,32 +468,73 @@ You can customize the integration tests with these environment variables:
 
 | Environment Variable | Description | Default |
 |----------------------|-------------|---------|
+| `K8S_MCP_TEST_USE_KWOK` | Use KWOK to create a test cluster | `true` |
+| `K8S_MCP_TEST_USE_EXISTING_CLUSTER` | Use existing cluster instead of creating a new one | `false` |
 | `K8S_CONTEXT` | Kubernetes context to use for tests | *current context* |
-| `K8S_SKIP_CLEANUP` | Skip cleanup of test resources | `False` |
+| `K8S_SKIP_CLEANUP` | Skip cleanup of test resources | `false` |
 
 Example usage:
 
 ```bash
-# Use a specific context
-K8S_CONTEXT=my-dev-cluster pytest -m integration
+# Force using KWOK even if other variables are set
+export K8S_MCP_TEST_USE_KWOK=true
+pytest -m integration
+
+# Use existing cluster with a specific context
+export K8S_MCP_TEST_USE_EXISTING_CLUSTER=true
+export K8S_CONTEXT=my-dev-cluster
+pytest -m integration
 
 # Skip cleanup of test resources (useful for debugging)
-K8S_SKIP_CLEANUP=true pytest -m integration
+export K8S_SKIP_CLEANUP=true
+pytest -m integration
 ```
+
+#### Troubleshooting Integration Tests
+
+1. **Authentication Issues**:
+   - Ensure your kubeconfig is properly set up
+   - Verify you can run `kubectl get pods` outside the tests
+
+2. **Cluster Connection Errors**:
+   - Check if your cluster is running with `kubectl cluster-info`
+   - Verify networking between your machine and the cluster
+
+3. **Permission Issues**:
+   - The tests require permissions to create resources
+   - Ensure your user/credentials have appropriate RBAC permissions
+
+4. **Tool Installation**:
+   - Some tests require specific tools like `helm`
+   - Skip specific tests if you don't have all tools installed
 
 #### Continuous Integration with GitHub Actions
 
 The project includes GitHub Actions workflows that automatically run integration tests:
 
 1. **CI Workflow**: Runs unit tests on every PR to ensure code quality
-2. **Integration Tests Workflow**: Sets up a Kind (Kubernetes in Docker) cluster and runs integration tests against it
+2. **Integration Tests Workflow**: Sets up a KWOK cluster and runs integration tests against it
 
 The integration test workflow:
-- Sets up a single-node Kind cluster
+- Installs KWOK on the CI runner
+- Creates a lightweight simulated Kubernetes cluster
 - Installs all required CLI tools (kubectl, helm, istioctl, argocd)
 - Runs all tests marked with the 'integration' marker
+- Cleans up the KWOK cluster when done
 
 You can also manually trigger the integration tests from the GitHub Actions tab, with an option to enable debugging if needed.
+
+#### Why KWOK for Testing?
+
+KWOK (Kubernetes Without Kubelet) provides significant advantages for testing Kubernetes command execution:
+
+1. **Lightweight and Fast**: KWOK clusters start in seconds without requiring container runtime
+2. **Focus on API Interaction**: Perfect for testing Kubernetes CLI commands and API responses
+3. **Consistent Environment**: Provides deterministic responses for predictable testing
+4. **Resource Efficiency**: Eliminates the overhead of running actual containers or nodes
+5. **CI/CD Friendly**: Ideal for continuous integration pipelines with minimal resource requirements
+
+Since our integration tests primarily validate command formation, execution, and output parsing rather than actual workload behavior, KWOK provides an ideal balance of fidelity and efficiency.
 
 ## Building from Source
 

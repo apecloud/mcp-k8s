@@ -53,29 +53,32 @@ jobs:
         run: |
           uv pip install -e ".[dev]"
 
-      - name: Create k8s Kind Cluster
-        uses: container-tools/kind-action@v2
-        with:
-          cluster_name: "test-cluster"
-          version: "v0.20.0"
-          wait: 120s
-          config: |
-            kind: Cluster
-            apiVersion: kind.x-k8s.io/v1alpha4
-            nodes:
-            - role: control-plane
-              kubeadmConfigPatches:
-              - |
-                kind: InitConfiguration
-                nodeRegistration:
-                  kubeletExtraArgs:
-                    node-labels: "ingress-ready=true"
-
-      - name: Check Kubernetes status
+      - name: Install KWOK
         run: |
+          # Download kwokctl and kwok binaries
+          export KWOK_VERSION=$(curl -s https://api.github.com/repos/kubernetes-sigs/kwok/releases/latest | grep tag_name | cut -d '"' -f 4)
+          curl -Lo kwokctl https://github.com/kubernetes-sigs/kwok/releases/download/${KWOK_VERSION}/kwokctl-linux-amd64
+          curl -Lo kwok https://github.com/kubernetes-sigs/kwok/releases/download/${KWOK_VERSION}/kwok-linux-amd64
+          
+          # Make binaries executable and move to PATH
+          chmod +x kwokctl kwok
+          sudo mv kwokctl kwok /usr/local/bin/
+          
+          # Verify installation
+          kwokctl version
+          kwok --version
+
+      - name: Create KWOK Cluster
+        run: |
+          # Create a KWOK cluster for testing
+          kwokctl create cluster --name=kwok-test
+          
+          # Set KUBECONFIG environment variable
+          echo "KUBECONFIG=$(kwokctl get kubeconfig --name=kwok-test)" >> $GITHUB_ENV
+          
+          # Verify cluster is running
           kubectl cluster-info
-          kubectl get nodes -o wide
-          kubectl get pods -A
+          kubectl get nodes
 
       - name: Install K8s CLI tools
         run: |
@@ -107,5 +110,15 @@ jobs:
 
       - name: Run integration tests
         run: |
-          # Run integration tests with the Kind cluster
+          # Run integration tests with the KWOK cluster
+          # Set environment variable to use the cluster we created directly
+          export K8S_MCP_TEST_USE_KWOK=false  # We already created the cluster
+          export K8S_MCP_TEST_USE_EXISTING_CLUSTER=true
+          
+          # Run the tests
           pytest -v -m integration
+      
+      - name: Cleanup KWOK Cluster
+        if: always()
+        run: |
+          kwokctl delete cluster --name=kwok-test

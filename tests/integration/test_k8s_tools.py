@@ -7,7 +7,7 @@ rather than setting up a cluster during the tests.
 
 import os
 import subprocess
-import time
+import uuid
 from collections.abc import Generator
 
 import pytest
@@ -20,65 +20,37 @@ from k8s_mcp_server.server import (
 
 
 @pytest.fixture
-def ensure_cluster_running(integration_cluster) -> Generator[None]:
-    """Ensures cluster is running (either fixture or existing) and returns context.
+def ensure_cluster_running(integration_cluster) -> Generator[str]:
+    """Ensures cluster is running and returns context.
 
-    Checks if a Kubernetes cluster is available using the provided context.
-
-    This fixture:
-    1. Uses the K8S_CONTEXT environment variable (if set) to select a specific K8s context.
-    2. Verifies the cluster connection is working.
-    3. Yields the current context name on success.
-    4. Skips tests if no context can be found or connected to.
-
-    For local development, you can use:
-    - k3s: https://k3s.io/ (lightweight single-node K8s)
-    - k0s: https://k0sproject.io/ (zero-friction Kubernetes)
-    - minikube: https://minikube.sigs.k8s.io/docs/start/
-    - kind: https://kind.sigs.k8s.io/docs/user/quick-start/
+    This fixture simplifies access to the context provided by the integration_cluster fixture.
+    The integration_cluster fixture now handles KWOK cluster creation by default.
 
     Returns:
-        Current context name if cluster is running, raises skip exception otherwise.
+        Current context name for use with kubectl commands
     """
-    # Check if a specific context was provided
-    k8s_context = os.environ.get("K8S_CONTEXT")
-    context_args = []
-
-    if k8s_context:
-        context_args = ["--context", k8s_context]
-        print(f"Using specified Kubernetes context: {k8s_context}")
-
-    # Try to reach the Kubernetes API
+    k8s_context = integration_cluster
+    
+    if not k8s_context:
+        pytest.skip("No Kubernetes context available from integration_cluster fixture.")
+        
+    # Verify basic cluster functionality
     try:
-        # Get current context if not specified
-        if not k8s_context:
-            result = subprocess.run(
-                ["kubectl", "config", "current-context"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode == 0:
-                k8s_context = result.stdout.strip()
-                print(f"Using current Kubernetes context: {k8s_context}")
-            else:
-                pytest.skip("No Kubernetes context is currently set.")
-
+        context_args = ["--context", k8s_context] if k8s_context else []
+        
         # Verify cluster connection
         cluster_cmd = ["kubectl", "cluster-info"] + context_args
-        result = subprocess.run(cluster_cmd, capture_output=True, timeout=5)
-        if result.returncode != 0:
-            pytest.skip(f"Cannot connect to Kubernetes cluster with context '{k8s_context}'.")
-
-        # Check if kubectl can access nodes
-        nodes_cmd = ["kubectl", "get", "nodes"] + context_args
-        result = subprocess.run(nodes_cmd, capture_output=True, timeout=5)
-        if result.returncode != 0:
-            pytest.skip(f"kubectl cannot list nodes with context '{k8s_context}'. Check your cluster access.")
-
+        result = subprocess.run(cluster_cmd, capture_output=True, text=True, timeout=5, check=True)
+        print(f"Using Kubernetes context: {k8s_context}")
+        
+        # KWOK clusters may not have actual nodes, so we'll skip the node check
+        # Instead, check if the API server is responding to a basic command
+        api_cmd = ["kubectl", "api-resources", "--request-timeout=5s"] + context_args
+        result = subprocess.run(api_cmd, capture_output=True, timeout=5, check=True)
+        
         yield k8s_context
-    except (subprocess.SubprocessError, FileNotFoundError):
-        pytest.skip("kubectl command failed or is not installed.")
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        pytest.skip(f"Error verifying cluster: {str(e)}")
 
 
 @pytest.fixture
@@ -86,7 +58,7 @@ def test_namespace(ensure_cluster_running) -> Generator[str]:
     """Create a test namespace and clean it up after tests.
 
     This fixture:
-    1. Creates a dedicated test namespace.
+    1. Creates a dedicated test namespace in the test cluster (KWOK or real).
     2. Yields the namespace name for tests to use.
     3. Cleans up the namespace after tests complete (unless K8S_SKIP_CLEANUP=true).
 
@@ -100,22 +72,28 @@ def test_namespace(ensure_cluster_running) -> Generator[str]:
         The name of the test namespace.
     """
     k8s_context = ensure_cluster_running
-    namespace = f"k8s-mcp-test-{os.getpid()}-{int(time.time())}"  # Make namespace unique per test run
+    namespace = f"k8s-mcp-test-{uuid.uuid4().hex[:8]}"  # Unique namespace per test run
     context_args = ["--context", k8s_context] if k8s_context else []
 
     try:
-        # Create namespace (will fail if it exists, which is fine)
+        # Create namespace
         create_cmd = ["kubectl", "create", "namespace", namespace] + context_args
         create_result = subprocess.run(
             create_cmd,
             capture_output=True,
-            check=False
+            check=True,
+            timeout=10
         )
-
-        if create_result.returncode != 0 and b"AlreadyExists" not in create_result.stderr:
-            print(f"Warning: Failed to create namespace: {create_result.stderr.decode()}")
+        print(f"Created test namespace: {namespace}")
+    except subprocess.CalledProcessError as e:
+        if b"AlreadyExists" in e.stderr:
+            print(f"Namespace {namespace} already exists, reusing")
+        else:
+            print(f"Warning: Failed to create namespace: {e.stderr.decode()}")
+            pytest.skip(f"Could not create test namespace: {e.stderr.decode()}")
     except Exception as e:
         print(f"Warning: Error when setting up test namespace: {e}")
+        pytest.skip(f"Could not set up test namespace: {str(e)}")
 
     yield namespace
 
@@ -132,7 +110,9 @@ def test_namespace(ensure_cluster_running) -> Generator[str]:
         delete_cmd = ["kubectl", "delete", "namespace", namespace, "--wait=false"] + context_args
         subprocess.run(
             delete_cmd,
-            capture_output=True
+            capture_output=True,
+            check=False,
+            timeout=10
         )
     except Exception as e:
         print(f"Warning: Error when cleaning up test namespace: {e}")
