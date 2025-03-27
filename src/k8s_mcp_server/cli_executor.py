@@ -17,39 +17,23 @@ from k8s_mcp_server.config import (
     MAX_OUTPUT_SIZE,
     SUPPORTED_CLI_TOOLS,
 )
+from k8s_mcp_server.errors import (
+    AuthenticationError,
+    CommandExecutionError,
+    CommandTimeoutError,
+    CommandValidationError,
+)
 from k8s_mcp_server.logging_utils import get_logger
 from k8s_mcp_server.security import validate_command
 from k8s_mcp_server.tools import (
     CommandHelpResult,
     CommandResult,
-    ErrorDetails,  # Make sure this is imported
-    ErrorDetailsNested,  # Make sure this is imported
     is_pipe_command,
     split_pipe_command,
 )
 
 # Configure module logger
 logger = get_logger("cli_executor")
-
-
-class CommandValidationError(Exception):
-    """Exception raised when a command fails validation.
-
-    This exception is raised when a command doesn't meet the
-    validation requirements, such as starting with a supported CLI tool.
-    """
-
-    pass
-
-
-class CommandExecutionError(Exception):
-    """Exception raised when a command fails to execute.
-
-    This exception is raised when there's an error during command
-    execution, such as timeouts or subprocess failures.
-    """
-
-    pass
 
 
 async def check_cli_installed(cli_tool: str) -> bool:
@@ -132,12 +116,14 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
     Raises:
         CommandValidationError: If the command is invalid
         CommandExecutionError: If the command fails to execute
+        AuthenticationError: If authentication fails
+        CommandTimeoutError: If the command times out
     """
     # Validate the command
     try:
         validate_command(command)
     except ValueError as e:
-        raise CommandValidationError(str(e)) from e
+        raise CommandValidationError(str(e), {"command": command}) from e
 
     # Handle piped commands
     is_piped = is_pipe_command(command)
@@ -180,18 +166,10 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
                 logger.error(f"Error killing process: {e}")
 
             execution_time = time.time() - start_time
-            error_message = f"Command timed out after {timeout} seconds"
-            error_details = ErrorDetails(
-                message=error_message,
-                code="TIMEOUT_ERROR",
-                details=ErrorDetailsNested(command=command)
-            )
-            return CommandResult(
-                status="error",
-                output=error_message,
-                error=error_details,
-                execution_time=execution_time,
-            )
+            raise CommandTimeoutError(
+                f"Command timed out after {timeout} seconds",
+                {"command": command, "timeout": timeout}
+            ) from None
 
         # Process output
         stdout_str = stdout.decode("utf-8", errors="replace")
@@ -207,11 +185,9 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
             logger.warning(f"Command failed with return code {process.returncode}: {command}")
             logger.debug(f"Command error output: {stderr_str}")
 
-            error_code = "EXECUTION_ERROR"
             error_message = stderr_str or "Command failed with no error output"
 
             if is_auth_error(stderr_str):
-                error_code = "AUTH_ERROR"
                 cli_tool = get_tool_from_command(command)
                 auth_error_msg = f"Authentication error: {stderr_str}"
 
@@ -225,44 +201,41 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
                     case "argocd":
                         auth_error_msg += "\nPlease check your ArgoCD login status."
 
-                error_message = auth_error_msg
-
-            error_details = ErrorDetails(
-                message=error_message,
-                code=error_code,
-                details=ErrorDetailsNested(
-                    command=command,
-                    exit_code=process.returncode,
-                    stderr=stderr_str,
+                raise AuthenticationError(
+                    auth_error_msg,
+                    {
+                        "command": command,
+                        "exit_code": process.returncode,
+                        "stderr": stderr_str,
+                    }
                 )
-            )
-
-            return CommandResult(
-                status="error",
-                output=error_message, # Use the potentially enhanced error_message
-                error=error_details,
-                exit_code=process.returncode,
-                execution_time=execution_time,
-            )
+            else:
+                raise CommandExecutionError(
+                    error_message,
+                    {
+                        "command": command,
+                        "exit_code": process.returncode,
+                        "stderr": stderr_str,
+                    }
+                )
 
         return CommandResult(
-            status="success", output=stdout_str, exit_code=process.returncode, execution_time=execution_time
+            status="success",
+            output=stdout_str,
+            exit_code=process.returncode,
+            execution_time=execution_time
         )
     except asyncio.CancelledError:
         raise
+    except (CommandValidationError, CommandExecutionError, AuthenticationError, CommandTimeoutError):
+        # Re-raise specific exceptions so they can be caught and handled at the API boundary
+        raise
     except Exception as e:
         logger.error(f"Failed to execute command: {str(e)}")
-        error_message = f"Failed to execute command: {str(e)}"
-        error_details = ErrorDetails(
-            message=error_message,
-            code="INTERNAL_ERROR",
-            details=ErrorDetailsNested(command=command)
-        )
-        return CommandResult(
-            status="error",
-            output=error_message,
-            error=error_details,
-        )
+        raise CommandExecutionError(
+            f"Failed to execute command: {str(e)}",
+            {"command": command}
+        ) from e
 
 
 def inject_context_namespace(command: str) -> str:
@@ -346,7 +319,10 @@ def inject_context_namespace(command: str) -> str:
     is_resource_command = any(arg in resource_commands for arg in args)
 
     # Some commands operate cluster-wide or don't need a namespace
-    non_namespace_resources = ["nodes", "namespaces", "pv", "persistentvolumes", "storageclasses", "clusterroles", "clusterrolebindings", "apiservices", "certificatesigningrequests"]
+    non_namespace_resources = [
+        "nodes", "namespaces", "pv", "persistentvolumes", "storageclasses",
+        "clusterroles", "clusterrolebindings", "apiservices", "certificatesigningrequests"
+    ]
     targets_non_namespace_resource = any(arg in non_namespace_resources for arg in args)
 
     # Check if the command itself implies cluster scope (e.g., api-resources)
@@ -401,11 +377,35 @@ async def get_command_help(cli_tool: str, command: str | None = None) -> Command
     try:
         logger.debug(f"Getting command help for: {cmd_str}")
         result = await execute_command(cmd_str)
-
-        if result["status"] == "success":
-            return CommandHelpResult(help_text=result["output"])
-        else:
-            return CommandHelpResult(help_text=f"Error: {result['output']}", status="error", error=result.get("error"))
+        return CommandHelpResult(help_text=result["output"])
+    except CommandValidationError as e:
+        logger.warning(f"Help command validation error: {e}")
+        return CommandHelpResult(
+            help_text=f"Command validation error: {str(e)}",
+            status="error",
+            error={"message": str(e), "code": "VALIDATION_ERROR"},
+        )
+    except CommandExecutionError as e:
+        logger.warning(f"Help command execution error: {e}")
+        return CommandHelpResult(
+            help_text=f"Command execution error: {str(e)}",
+            status="error",
+            error={"message": str(e), "code": "EXECUTION_ERROR"},
+        )
+    except AuthenticationError as e:
+        logger.warning(f"Help command authentication error: {e}")
+        return CommandHelpResult(
+            help_text=f"Authentication error: {str(e)}",
+            status="error",
+            error={"message": str(e), "code": "AUTH_ERROR"},
+        )
+    except CommandTimeoutError as e:
+        logger.warning(f"Help command timeout error: {e}")
+        return CommandHelpResult(
+            help_text=f"Command timed out: {str(e)}",
+            status="error",
+            error={"message": str(e), "code": "TIMEOUT_ERROR"},
+        )
     except Exception as e:
         logger.error(f"Unexpected error while getting command help: {e}", exc_info=True)
         return CommandHelpResult(

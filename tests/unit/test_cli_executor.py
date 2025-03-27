@@ -6,13 +6,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from k8s_mcp_server.cli_executor import (
-    CommandExecutionError,
-    CommandValidationError,
     check_cli_installed,
     execute_command,
     get_command_help,
     inject_context_namespace,
     is_auth_error,
+)
+from k8s_mcp_server.errors import (
+    AuthenticationError,
+    CommandExecutionError,
+    CommandTimeoutError,
+    CommandValidationError,
 )
 from k8s_mcp_server.security import is_safe_exec_command, validate_k8s_command, validate_pipe_command
 
@@ -243,10 +247,15 @@ async def test_execute_command_error():
         with patch("k8s_mcp_server.cli_executor.validate_command"):
             # Mock context injection
             with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
-                result = await execute_command("kubectl get pods")
-
-                assert result["status"] == "error"
-                assert result["output"] == "Error message"
+                with pytest.raises(CommandExecutionError) as exc_info:
+                    await execute_command("kubectl get pods")
+                
+                assert "Error message" in str(exc_info.value)
+                assert exc_info.value.code == "EXECUTION_ERROR"
+                assert "command" in exc_info.value.details
+                assert exc_info.value.details["command"] == "kubectl get pods"
+                assert "exit_code" in exc_info.value.details
+                assert exc_info.value.details["exit_code"] == 1
 
 @pytest.mark.asyncio
 async def test_execute_command_auth_error():
@@ -262,11 +271,14 @@ async def test_execute_command_auth_error():
         with patch("k8s_mcp_server.cli_executor.validate_command"):
             # Mock context injection
             with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
-                result = await execute_command("kubectl get pods")
-
-                assert result["status"] == "error"
-                assert "Authentication error" in result["output"]
-                assert "kubeconfig" in result["output"]
+                with pytest.raises(AuthenticationError) as exc_info:
+                    await execute_command("kubectl get pods")
+                
+                assert "Authentication error" in str(exc_info.value)
+                assert "kubeconfig" in str(exc_info.value)
+                assert exc_info.value.code == "AUTH_ERROR"
+                assert "command" in exc_info.value.details
+                assert exc_info.value.details["command"] == "kubectl get pods"
                 
     # Test auth errors for different CLI tools
     for cli_tool, error_msg in [
@@ -285,11 +297,12 @@ async def test_execute_command_auth_error():
             with patch("k8s_mcp_server.cli_executor.validate_command"):
                 with patch("k8s_mcp_server.cli_executor.inject_context_namespace", 
                           return_value=f"{cli_tool} list"):
-                    result = await execute_command(f"{cli_tool} list")
-
-                    assert result["status"] == "error"
-                    assert "Authentication error" in result["output"]
-                    assert error_msg in result["output"]
+                    with pytest.raises(AuthenticationError) as exc_info:
+                        await execute_command(f"{cli_tool} list")
+                    
+                    assert "Authentication error" in str(exc_info.value)
+                    assert error_msg in str(exc_info.value)
+                    assert exc_info.value.code == "AUTH_ERROR"
 
 @pytest.mark.asyncio
 async def test_execute_command_timeout():
@@ -309,11 +322,16 @@ async def test_execute_command_timeout():
         with patch("k8s_mcp_server.cli_executor.validate_command"):
             # Mock context injection
             with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
-                result = await execute_command("kubectl get pods", timeout=1)
+                with pytest.raises(CommandTimeoutError) as exc_info:
+                    await execute_command("kubectl get pods", timeout=1)
 
-                # Check error message in result
-                assert result["status"] == "error"
-                assert "timed out" in result["output"].lower()
+                # Check error details
+                assert "timed out" in str(exc_info.value).lower()
+                assert exc_info.value.code == "TIMEOUT_ERROR"
+                assert "command" in exc_info.value.details
+                assert exc_info.value.details["command"] == "kubectl get pods"
+                assert "timeout" in exc_info.value.details
+                assert exc_info.value.details["timeout"] == 1
 
                 # Verify process was killed
                 process_mock.kill.assert_called_once()
@@ -391,11 +409,12 @@ async def test_execute_command_process_kill_error():
             # Mock context injection
             with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods"):
                 with patch("k8s_mcp_server.cli_executor.logger") as mock_logger:
-                    result = await execute_command("kubectl get pods", timeout=1)
+                    with pytest.raises(CommandTimeoutError) as exc_info:
+                        await execute_command("kubectl get pods", timeout=1)
                     
-                    # Check error message in result
-                    assert result["status"] == "error"
-                    assert "timed out" in result["output"].lower()
+                    # Check error details
+                    assert "timed out" in str(exc_info.value).lower()
+                    assert exc_info.value.code == "TIMEOUT_ERROR"
                     
                     # Verify error logging when kill fails
                     mock_logger.error.assert_called_once()
@@ -431,19 +450,43 @@ async def test_get_command_help():
     with patch("k8s_mcp_server.cli_executor.execute_command", side_effect=CommandValidationError("Invalid command")):
         result = await get_command_help("kubectl", "get")
 
-        assert "Error" in result.help_text
+        assert "Command validation error" in result.help_text
+        assert result.status == "error"
+        assert result.error["code"] == "VALIDATION_ERROR"
 
     # Test with execution error
     with patch("k8s_mcp_server.cli_executor.execute_command", side_effect=CommandExecutionError("Execution failed")):
         result = await get_command_help("kubectl", "get")
 
-        assert "Error retrieving help" in result.help_text
+        assert "Command execution error" in result.help_text
+        assert result.status == "error"
+        assert result.error["code"] == "EXECUTION_ERROR"
+
+    # Test with auth error
+    from k8s_mcp_server.errors import AuthenticationError
+    with patch("k8s_mcp_server.cli_executor.execute_command", side_effect=AuthenticationError("Auth failed")):
+        result = await get_command_help("kubectl", "get")
+
+        assert "Authentication error" in result.help_text
+        assert result.status == "error"
+        assert result.error["code"] == "AUTH_ERROR"
+
+    # Test with timeout error
+    from k8s_mcp_server.errors import CommandTimeoutError
+    with patch("k8s_mcp_server.cli_executor.execute_command", side_effect=CommandTimeoutError("Command timed out")):
+        result = await get_command_help("kubectl", "get")
+
+        assert "Command timed out" in result.help_text
+        assert result.status == "error"
+        assert result.error["code"] == "TIMEOUT_ERROR"
 
     # Test with unexpected error
     with patch("k8s_mcp_server.cli_executor.execute_command", side_effect=Exception("Unexpected error")):
         result = await get_command_help("kubectl", "get")
 
         assert "Error retrieving help" in result.help_text
+        assert result.status == "error"
+        assert result.error["code"] == "INTERNAL_ERROR"
         
     # Test with unsupported CLI tool
     result = await get_command_help("unsupported_tool", "get")

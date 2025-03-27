@@ -126,8 +126,9 @@ async def test_execute_kubectl_with_validation_error(mock_k8s_cli_status):
         assert "status" in result
         assert "output" in result
         assert result["status"] == "error"
-        assert "Command validation error" in result["output"]
         assert "Invalid command" in result["output"]
+        assert "error" in result
+        assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
@@ -142,8 +143,9 @@ async def test_execute_kubectl_with_execution_error(mock_k8s_cli_status):
         assert "status" in result
         assert "output" in result
         assert result["status"] == "error"
-        assert "Command execution error" in result["output"]
         assert "Execution failed" in result["output"]
+        assert "error" in result
+        assert result["error"]["code"] == "EXECUTION_ERROR"
 
 
 @pytest.mark.asyncio
