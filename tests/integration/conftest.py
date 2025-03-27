@@ -175,6 +175,10 @@ def integration_cluster_fixture() -> Generator[str]:
             # Set KUBECONFIG environment variable for the tests
             os.environ["KUBECONFIG"] = kubeconfig_path
             
+            # Give the cluster a moment to fully initialize
+            print("Waiting for KWOK cluster to initialize...")
+            time.sleep(5)
+            
             # Get the context name
             context_cmd = ["kubectl", "--kubeconfig", kubeconfig_path, "config", "current-context"]
             context = subprocess.run(
