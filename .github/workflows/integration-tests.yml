@@ -53,24 +53,15 @@ jobs:
         run: |
           uv pip install -e ".[dev]"
 
-      - name: Install KWOK
-        run: |
-          # Download kwokctl and kwok binaries
-          export KWOK_VERSION=$(curl -s https://api.github.com/repos/kubernetes-sigs/kwok/releases/latest | grep tag_name | cut -d '"' -f 4)
-          curl -Lo kwokctl https://github.com/kubernetes-sigs/kwok/releases/download/${KWOK_VERSION}/kwokctl-linux-amd64
-          curl -Lo kwok https://github.com/kubernetes-sigs/kwok/releases/download/${KWOK_VERSION}/kwok-linux-amd64
-          
-          # Make binaries executable and move to PATH
-          chmod +x kwokctl kwok
-          sudo mv kwokctl kwok /usr/local/bin/
-          
-          # Verify installation
-          kwokctl version
-          kwok --version
+      - name: Set up KWOK
+        uses: kubernetes-sigs/kwok@main
+        with:
+          command: kwokctl
+          kwok-version: latest  # Optional: specify version or use latest
 
       - name: Create KWOK Cluster
         run: |
-          # Create a KWOK cluster for testing
+          # Create a KWOK cluster for testing with specific Kubernetes version
           kwokctl create cluster --name=kwok-test
           
           # Set KUBECONFIG environment variable

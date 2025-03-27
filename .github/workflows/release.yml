@@ -76,10 +76,10 @@ jobs:
           push: true
           build-args: |
             PYTHON_VERSION=3.13-slim
-            KUBECTL_VERSION=v1.29.2
-            HELM_VERSION=v3.14.0
-            ISTIO_VERSION=1.21.0
-            ARGOCD_VERSION=v2.9.6
+            KUBECTL_VERSION=v1.31.0
+            HELM_VERSION=v3.17.1
+            ISTIO_VERSION=1.25.1
+            ARGOCD_VERSION=v2.14.8
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
