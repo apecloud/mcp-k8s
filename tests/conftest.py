@@ -1,7 +1,8 @@
 """Test fixtures for the K8s MCP Server tests."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 
 # Standard mock types for consistent mocking
@@ -45,16 +46,16 @@ def mock_k8s_cli_status():
 @pytest.fixture
 def mock_k8s_tools(monkeypatch):
     """Mock all K8s CLI tools as installed.
-    
+
     This provides a single fixture to mock the CLI tool status and related checks.
     """
     # Mock CLI status
     status = {"kubectl": True, "istioctl": True, "helm": True, "argocd": True}
     monkeypatch.setattr("k8s_mcp_server.server.cli_status", status)
-    
+
     # Mock installed check function
     monkeypatch.setattr("k8s_mcp_server.cli_executor.check_cli_installed", lambda _: True)
-    
+
     return status
 
 
@@ -81,9 +82,9 @@ def mock_command_execution(return_value=None):
     """Create a context manager that mocks command execution."""
     if return_value is None:
         return_value = {"status": "success", "output": "Mocked command output"}
-        
-    return patch("k8s_mcp_server.cli_executor.execute_command", 
-                new_callable=AsyncMock, 
+
+    return patch("k8s_mcp_server.cli_executor.execute_command",
+                new_callable=AsyncMock,
                 return_value=return_value)
 
 

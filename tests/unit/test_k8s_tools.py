@@ -5,13 +5,17 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from k8s_mcp_server import __version__
 from k8s_mcp_server.cli_executor import CommandExecutionError, CommandValidationError
 from k8s_mcp_server.server import (
-    describe_kubectl, describe_helm, describe_istioctl, describe_argocd,
-    execute_kubectl, execute_helm, execute_istioctl, execute_argocd
+    describe_argocd,
+    describe_helm,
+    describe_istioctl,
+    describe_kubectl,
+    execute_argocd,
+    execute_helm,
+    execute_istioctl,
+    execute_kubectl,
 )
-
 
 # Tests for describe_* functions
 # ==============================
@@ -35,7 +39,7 @@ async def test_describe_tool(describe_func, tool_name, command, mock_get_command
 @pytest.mark.parametrize("describe_func, tool_name", [
     (describe_kubectl, "kubectl"),
     (describe_helm, "helm"),
-    (describe_istioctl, "istioctl"), 
+    (describe_istioctl, "istioctl"),
     (describe_argocd, "argocd"),
 ])
 @pytest.mark.asyncio
@@ -97,7 +101,7 @@ async def test_execute_tool(execute_func, tool_name, command, mock_execute_comma
 async def test_execute_tool_with_context(execute_func, mock_execute_command, mock_k8s_cli_status):
     """Test the execute_* tools with context."""
     mock_context = AsyncMock()
-    
+
     with patch("k8s_mcp_server.server.execute_command", mock_execute_command):
         result = await execute_func(command="test", ctx=mock_context)
 
@@ -167,7 +171,7 @@ async def test_tool_command_preprocessing(mock_execute_command, mock_k8s_cli_sta
 @pytest.mark.asyncio
 async def test_concurrent_command_execution(mock_k8s_cli_status):
     """Test parallel command execution safety."""
-    
+
     # Patch execute_command within the server module's scope
     with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_exec:
         mock_exec.return_value = {"status": "success", "output": "test"}

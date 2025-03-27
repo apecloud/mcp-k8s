@@ -30,27 +30,27 @@ def ensure_cluster_running(integration_cluster) -> Generator[str]:
         Current context name for use with kubectl commands
     """
     k8s_context = integration_cluster
-    
+
     if not k8s_context:
         pytest.skip("No Kubernetes context available from integration_cluster fixture.")
-        
+
     # Verify basic cluster functionality
     try:
         context_args = ["--context", k8s_context] if k8s_context else []
         # Explicitly get and use the KUBECONFIG from environment
         kubeconfig = os.environ.get("KUBECONFIG")
         kubeconfig_args = ["--kubeconfig", kubeconfig] if kubeconfig else []
-        
+
         # Verify cluster connection
         cluster_cmd = ["kubectl", "cluster-info"] + context_args + kubeconfig_args
-        result = subprocess.run(cluster_cmd, capture_output=True, text=True, timeout=5, check=True)
+        subprocess.run(cluster_cmd, capture_output=True, text=True, timeout=5, check=True)
         print(f"Using Kubernetes context: {k8s_context} with kubeconfig: {kubeconfig}")
-        
+
         # KWOK clusters may not have actual nodes, so we'll skip the node check
         # Instead, check if the API server is responding to a basic command
         api_cmd = ["kubectl", "api-resources", "--request-timeout=5s"] + context_args + kubeconfig_args
-        result = subprocess.run(api_cmd, capture_output=True, timeout=5, check=True)
-        
+        subprocess.run(api_cmd, capture_output=True, timeout=5, check=True)
+
         yield k8s_context
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         pytest.skip(f"Error verifying cluster: {str(e)}")
@@ -84,7 +84,7 @@ def test_namespace(ensure_cluster_running) -> Generator[str]:
     try:
         # Create namespace
         create_cmd = ["kubectl", "create", "namespace", namespace] + context_args + kubeconfig_args
-        create_result = subprocess.run(
+        subprocess.run(
             create_cmd,
             capture_output=True,
             check=True,
@@ -160,20 +160,20 @@ async def test_kubectl_get_pods(ensure_cluster_running, test_namespace):
     # Bypass the kubectl execute function with its argument reordering
     # and apply the pod manifest directly using subprocess
     kubeconfig = os.environ.get("KUBECONFIG")
-    print(f"Applying pod manifest directly using kubectl...")
-    cmd = ["kubectl", "apply", "-f", "/tmp/test-pod.yaml", 
+    print("Applying pod manifest directly using kubectl...")
+    cmd = ["kubectl", "apply", "-f", "/tmp/test-pod.yaml",
            "--namespace", test_namespace, "--context", k8s_context]
     if kubeconfig:
         cmd.extend(["--kubeconfig", kubeconfig])
-    
+
     create_result = subprocess.run(cmd, capture_output=True, text=True)
-    
+
     if create_result.returncode != 0:
         print(f"Error applying pod manifest: {create_result.stderr}")
         pytest.fail("Failed to create test pod with kubectl")
     else:
-        print(f"Pod created successfully.")
-    
+        print("Pod created successfully.")
+
     # Now continue with the test
 
     # Give the pod some time to be created
@@ -183,18 +183,18 @@ async def test_kubectl_get_pods(ensure_cluster_running, test_namespace):
 
     # Now test listing pods
     # First check directly with kubectl to confirm the pod exists
-    print(f"Verifying pod exists with direct kubectl...")
-    list_cmd = ["kubectl", "get", "pods", 
+    print("Verifying pod exists with direct kubectl...")
+    list_cmd = ["kubectl", "get", "pods",
                "--namespace", test_namespace, "--context", k8s_context]
     if kubeconfig:
         list_cmd.extend(["--kubeconfig", kubeconfig])
-    
+
     list_result = subprocess.run(list_cmd, capture_output=True, text=True)
     if list_result.returncode == 0:
         print(f"Direct kubectl pod listing: {list_result.stdout}")
     else:
         print(f"Error listing pods directly: {list_result.stderr}")
-    
+
     # Use the server function with the subcommand in quotes and use a different flag format
     # This format should prevent argument reordering issues
     result = await execute_kubectl(
