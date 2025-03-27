@@ -16,12 +16,6 @@ from pathlib import Path
 DEFAULT_TIMEOUT = int(os.environ.get("K8S_MCP_TIMEOUT", "300"))
 MAX_OUTPUT_SIZE = int(os.environ.get("K8S_MCP_MAX_OUTPUT", "100000"))
 
-# Resource limitations
-RESOURCE_LIMITS = {
-    "cpu_percent": int(os.environ.get("K8S_MCP_CPU_LIMIT", "50")),  # Max CPU percentage
-    "memory_mb": int(os.environ.get("K8S_MCP_MEMORY_LIMIT", "500")),  # Max memory in MB
-}
-
 # Kubernetes specific settings
 K8S_CONTEXT = os.environ.get("K8S_CONTEXT", "")  # Empty means use current context
 K8S_NAMESPACE = os.environ.get("K8S_NAMESPACE", "default")
