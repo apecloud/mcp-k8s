@@ -17,7 +17,28 @@ K8s MCP Server acts as a secure bridge between language models (like Claude) and
 
 K8s MCP Server is designed with a focus on security, performance, and extensibility. The system comprises the following core components:
 
-![K8s MCP Server Architecture](architecture-diagram.png)
+```mermaid
+flowchart TD
+    A[AI Assistant] <-->|HTTP/WebSocket<br>MCP Protocol| B[FastMCP Server]
+    B --> C[Tool Registration<br>Logging & Context]
+    B --> D[Prompt Templates]
+    C --> E[Command Validation]
+    E --> F[CLI Executor]
+    F --> G[Tool-specific Handlers]
+    G --> H[kubectl]
+    G --> I[helm]
+    G --> J[istioctl]
+    G --> K[argocd]
+    F --> L[Security Validator]
+    
+    classDef core fill:#f9f,stroke:#333,stroke-width:2px
+    classDef tools fill:#bbf,stroke:#333,stroke-width:1px
+    classDef security fill:#fbb,stroke:#333,stroke-width:1px
+    
+    class B,C,D,F core
+    class G,H,I,J,K tools
+    class E,L security
+```
 
 ### Core Components
 
@@ -35,7 +56,28 @@ K8s MCP Server is designed with a focus on security, performance, and extensibil
 
 The following diagram illustrates how commands flow through the system:
 
-![Command Execution Flow](request-flow-diagram.png)
+```mermaid
+sequenceDiagram
+    participant LM as Language Model
+    participant MCP as MCP Server
+    participant Val as Security Validator
+    participant Exec as CLI Executor
+    participant K8s as K8s CLI Tools
+    
+    LM->>MCP: Tool request via MCP
+    MCP->>Val: Validate command
+    
+    alt Invalid Command
+        Val-->>MCP: Validation error
+        MCP-->>LM: Error response
+    else Valid Command
+        Val->>Exec: Execute command
+        Exec->>K8s: Run CLI tool
+        K8s-->>Exec: Command output
+        Exec-->>MCP: Formatted response
+        MCP-->>LM: Success response
+    end
+```
 
 1. The language model sends a command request via the MCP protocol.
 2. The server validates the command using security rules.
@@ -58,106 +100,111 @@ The following diagram illustrates how commands flow through the system:
 - Context and namespace management
 - Pre-built prompt templates for common Kubernetes operations
 
-## Installation
-
-### Option 1: Docker (Recommended)
-
-The Docker deployment is the recommended approach for security, isolation, and resilience:
-
-```bash
-# Pull the pre-built image
-docker pull ghcr.io/yourusername/k8s-mcp-server:latest
-
-# Run with your Kubernetes configuration mounted
-docker run -p 8080:8080 -v ~/.kube:/home/appuser/.kube:ro ghcr.io/yourusername/k8s-mcp-server:latest
-```
-
-Or using Docker Compose:
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/k8s-mcp-server.git
-cd k8s-mcp-server
-
-# Start the server
-docker-compose -f deploy/docker/docker-compose.yml up -d
-```
-
-### Option 2: Python Package
-
-For development or when Docker is not available:
-
-```bash
-# Install uv (recommended)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install the package using uv
-uv pip install k8s-mcp-server
-
-# Or install directly from source
-git clone https://github.com/yourusername/k8s-mcp-server.git
-cd k8s-mcp-server
-uv pip install -e .
-
-# Start the server
-python -m k8s_mcp_server
-```
-
 ## Requirements
 
-### For Docker deployment:
-- Docker
-- Valid Kubernetes configuration in `~/.kube/config`
+To use K8s MCP Server with Claude Desktop, you need:
 
-### For Python package:
-- Python 3.13 or later
-- kubectl, istioctl, helm, and/or argocd binaries installed and in PATH
-- Active kubeconfig configuration
+- Docker installed on your system
+- Valid Kubernetes configuration in `~/.kube/config`
+- Claude Desktop application
 
 ## Configuration
 
-K8s MCP Server can be configured via environment variables:
+K8s MCP Server can be configured via environment variables that can be passed to the Docker container:
 
-| Environment Variable | Description | Default |
-|----------------------|-------------|---------|
-| `K8S_MCP_HOST` | Host to bind the server | `0.0.0.0` |
-| `K8S_MCP_PORT` | Port to run the server on | `8080` |
-| `K8S_MCP_TIMEOUT` | Default timeout for commands (seconds) | `300` |
-| `K8S_MCP_MAX_OUTPUT` | Maximum output size (characters) | `100000` |
-| `K8S_CONTEXT` | Kubernetes context to use | *current context* |
-| `K8S_NAMESPACE` | Default Kubernetes namespace | `default` |
-| `K8S_MCP_LOG_DIR` | Directory for logs | `./logs` |
+| Environment Variable | Description | Default | Required |
+|----------------------|-------------|---------|----------|
+| `K8S_MCP_TIMEOUT` | Default timeout for commands (seconds) | `300` | No |
+| `K8S_MCP_MAX_OUTPUT` | Maximum output size (characters) | `100000` | No |
+| `K8S_CONTEXT` | Kubernetes context to use | *current context* | No |
+| `K8S_NAMESPACE` | Default Kubernetes namespace | `default` | No |
 
-### Setting Environment Variables
+For example, to use specific context and namespace, modify your Claude Desktop configuration:
 
-#### With Docker:
-
-```bash
-docker run -p 8080:8080 \
-  -v ~/.kube:/home/appuser/.kube:ro \
-  -e K8S_CONTEXT=my-cluster \
-  -e K8S_NAMESPACE=my-namespace \
-  -e K8S_MCP_TIMEOUT=600 \
-  ghcr.io/yourusername/k8s-mcp-server:latest
+```json
+{
+  "mcpServers": {
+    "kubernetes": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "~/.kube:/home/appuser/.kube:ro",
+        "-e",
+        "K8S_CONTEXT=my-cluster",
+        "-e",
+        "K8S_NAMESPACE=my-namespace",
+        "ghcr.io/yourusername/k8s-mcp-server:latest"
+      ]
+    }
+  }
+}
 ```
 
-#### With Docker Compose:
+## Integrating with Claude Desktop
 
-Edit the environment section in `deploy/docker/docker-compose.yml`:
+To integrate K8s MCP Server with Claude Desktop, follow these steps:
 
-```yaml
-environment:
-  - K8S_CONTEXT=my-cluster
-  - K8S_NAMESPACE=my-namespace
-  - K8S_MCP_TIMEOUT=600
+1. **Locate the Claude Desktop configuration file**:
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+2. **Edit the configuration file** to include the K8s MCP Server:
+   ```json
+   {
+     "mcpServers": {
+       "kubernetes": {
+         "command": "docker",
+         "args": [
+           "run",
+           "-i",
+           "--rm",
+           "-v",
+           "~/.kube:/home/appuser/.kube:ro",
+           "ghcr.io/yourusername/k8s-mcp-server:latest"
+         ]
+       }
+     }
+   }
+   ```
+
+   > **Note**: Make sure to replace `~/.kube` with the absolute path to your Kubernetes configuration directory, and update the image name if using a custom image.
+
+3. **Restart Claude Desktop** to apply the changes
+   - After restarting, you should see a hammer 🔨 icon in the bottom right corner of the input box
+   - This indicates that the K8s MCP Server is available for use
+
+```mermaid
+flowchart TD
+    subgraph "User Device"
+        config[Edit claude_desktop_config.json]
+        claude[Claude Desktop]
+        docker[Docker Container]
+        k8s_config[Kubernetes Config]
+    end
+
+    subgraph "Kubernetes Cluster"
+        k8s[Kubernetes Services]
+    end
+
+    config -->|Add MCP Server Config| claude
+    claude -->|Docker Run Command| docker
+    k8s_config -->|Mount Read-only| docker
+    docker -->|kubectl & other CLI tools| k8s
 ```
 
-#### With Python:
+### Using Kubernetes Tools in Claude
 
-```bash
-export K8S_CONTEXT=my-cluster
-export K8S_NAMESPACE=my-namespace
-python -m k8s_mcp_server
+Once configured, you can ask Claude to perform Kubernetes operations:
+
+- "Show me the pods in my default namespace using kubectl"
+- "Help me deploy a new application with Helm"
+- "Check the status of my Istio service mesh"
+- "List all my Kubernetes deployments"
+
+Claude will automatically use the appropriate Kubernetes CLI tools via the K8s MCP Server.
 ```
 
 ## API Reference
@@ -237,7 +284,22 @@ argocd app sync my-app
 
 K8s MCP Server includes comprehensive test coverage with both unit and integration tests. The testing architecture is designed to be lightweight, fast, and representative of real-world usage.
 
-![Testing Architecture](testing-architecture.png)
+```mermaid
+flowchart TD
+    A[Testing Framework] --> B[Unit Tests]
+    A --> C[Integration Tests]
+    B --> D[Mock Executor]
+    B --> E[Validation Tests]
+    B --> F[Security Tests]
+    C --> G[KWOK Cluster]
+    C --> H[Local Cluster]
+    
+    classDef unit fill:#bbf,stroke:#333,stroke-width:1px
+    classDef integ fill:#fbb,stroke:#333,stroke-width:1px
+    
+    class B,D,E,F unit
+    class C,G,H integ
+```
 
 ### Running Integration Tests
 
@@ -492,6 +554,57 @@ The server includes several safety features:
 - **Command validation**: Potentially dangerous commands require explicit resource names
 - **Context separation**: Automatic context and namespace injection for commands
 
+## Project Architecture and Code Structure
+
+K8s MCP Server is organized around a modular architecture that separates concerns and promotes maintainability:
+
+```mermaid
+flowchart TD
+    A[__main__.py] --> B[server.py]
+    B --> C[config.py]
+    B --> D[cli_executor.py]
+    B --> E[prompts.py]
+    D --> F[security.py]
+    D --> G[tools.py]
+    D --> H[errors.py]
+    B --> I[logging_utils.py]
+    
+    classDef core fill:#f9f,stroke:#333,stroke-width:2px
+    classDef utils fill:#bbf,stroke:#333,stroke-width:1px
+    
+    class A,B,D core
+    class C,E,F,G,H,I utils
+```
+
+### Key Components:
+
+1. **server.py**: The central component that initializes the MCP server, registers tools and prompts, and manages client connections. It implements the Model Context Protocol and handles request/response lifecycle.
+
+2. **cli_executor.py**: Manages the execution of CLI commands with proper validation, timeout handling, and error capture. It translates between the abstract tool requests and the concrete CLI commands.
+
+3. **security.py**: Implements command validation rules and security checks to prevent potentially dangerous operations. It enforces restrictions on allowed commands and parameters.
+
+4. **tools.py**: Defines common utilities, data structures, and helper functions for working with Kubernetes commands.
+
+5. **prompts.py**: Registers and defines template prompts for common Kubernetes operations to improve AI interactions.
+
+6. **config.py**: Manages configuration settings for the server, including environment variables, default values, and supported CLI tools.
+
+7. **errors.py**: Provides standardized error handling, custom exceptions, and error formatting.
+
+8. **logging_utils.py**: Implements consistent logging infrastructure across the application.
+
+### Design Principles:
+
+- **Separation of Concerns**: Each module has a well-defined responsibility and role.
+- **Centralized Configuration**: Settings are managed through a single configuration module.
+- **Standardized Error Handling**: Consistent error treatment across all components.
+- **Extensibility**: The architecture makes it easy to add support for new Kubernetes CLI tools.
+- **Security First**: Security validation is integrated throughout the command lifecycle.
+- **Fault Tolerance**: Robust error handling and recovery mechanisms.
+
+This architecture allows for flexibility while maintaining simplicity, with clear interfaces between components and well-defined responsibilities.
+
 ## For Contributors
 
 If you're interested in contributing to K8s MCP Server, here's an overview of the project structure:
@@ -506,7 +619,10 @@ k8s-mcp-server/
 │       ├── cli_executor.py # Command execution and process management
 │       ├── security.py     # Command validation and security rules
 │       ├── tools.py        # Shared utilities and data structures
-│       └── prompts.py      # Prompt templates for common operations
+│       ├── errors.py       # Standardized error handling
+│       ├── prompts.py      # Prompt templates for common operations
+│       ├── config.py       # Configuration and settings
+│       └── logging_utils.py # Logging infrastructure
 ├── tests/
 │   ├── unit/               # Unit tests (no K8s cluster required)
 │   └── integration/        # Integration tests (requires K8s cluster or KWOK)
@@ -543,10 +659,87 @@ k8s-mcp-server/
 
 ### Contribution Guidelines
 
-- Follow existing code style and patterns
-- Add tests for new functionality
-- Update documentation when making significant changes
-- Keep security as a primary consideration
+- **Code Style**: Follow PEP 8 and the project's style guide (enforced via `ruff`)
+- **Documentation**: Keep code comments and documentation up-to-date with changes
+- **Testing**: Add tests for new functionality with good coverage
+- **Simplicity**: Favor simple, maintainable solutions over complex ones
+- **Security**: Keep security as a primary consideration in all changes
+- **Dependencies**: Add new dependencies only when they provide significant value
+
+### Development and Debugging
+
+K8s MCP Server is built using the [Model Context Protocol Python SDK](https://github.com/modelcontextprotocol/python-sdk). Here are some tips for developing and debugging:
+
+#### Using MCP Inspector
+
+The MCP Inspector is a powerful tool for local development and testing:
+
+```bash
+# Install the MCP CLI if not already installed
+pip install "mcp[cli]"
+
+# Run the server with the inspector
+mcp dev src/k8s_mcp_server/server.py
+```
+
+The inspector provides:
+- Interactive testing of tools and prompts
+- Visualization of request/response flows
+- Direct execution of commands without Claude Desktop
+
+#### Local Development Without Docker
+
+For quick iteration during development:
+
+```bash
+# Set up a development environment
+uv venv -p 3.13
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+
+# Run the server directly
+python -m k8s_mcp_server
+
+# Or use the MCP run command
+mcp run src/k8s_mcp_server/server.py
+```
+
+#### Debugging Tips
+
+1. **Enable Debug Logging**:
+   ```bash
+   export LOGLEVEL=DEBUG
+   python -m k8s_mcp_server
+   ```
+
+2. **Test Individual Tools**:
+   Use the MCP Inspector to test specific tools in isolation before integrating with Claude.
+
+3. **Inspect MCP Protocol**:
+   Monitor the raw MCP protocol messages using the inspector to understand how Claude interacts with your server.
+
+4. **Local Testing with Claude Desktop**:
+   During development, you can point Claude Desktop to your local server instead of using Docker:
+   ```json
+   {
+     "mcpServers": {
+       "kubernetes": {
+         "command": "/path/to/your/venv/bin/python",
+         "args": ["-m", "k8s_mcp_server"]
+       }
+     }
+   }
+   ```
+
+### Development Best Practices
+
+- **Modular Design**: Create reusable, single-purpose components
+- **Error Handling**: Implement robust error handling with helpful messages
+- **Logging**: Use appropriate logging levels (debug, info, error)
+- **Security**: Follow input validation and safe execution practices
+- **Testing**: Write comprehensive unit and integration tests
+- **Documentation**: Document complex logic and architectural decisions
+- **Backward Compatibility**: Maintain compatibility with existing clients when possible
 
 ## License
 
