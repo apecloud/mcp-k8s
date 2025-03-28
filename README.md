@@ -1,11 +1,11 @@
 # K8s MCP Server
 
-[![CI Status](https://github.com/yourusername/k8s-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/k8s-mcp-server/actions/workflows/ci.yml)
-[![Release Status](https://github.com/yourusername/k8s-mcp-server/actions/workflows/release.yml/badge.svg)](https://github.com/yourusername/k8s-mcp-server/actions/workflows/release.yml)
-[![codecov](https://codecov.io/gh/yourusername/k8s-mcp-server/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/k8s-mcp-server)
+[![CI Status](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/ci.yml)
+[![Release Status](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/release.yml/badge.svg)](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/alexei-led/k8s-mcp-server/branch/main/graph/badge.svg)](https://codecov.io/gh/alexei-led/k8s-mcp-server)
 [![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Docker Pulls](https://img.shields.io/docker/pulls/yourusername/k8s-mcp-server.svg)](https://github.com/yourusername/k8s-mcp-server/pkgs/container/k8s-mcp-server)
+[![Docker Pulls](https://img.shields.io/docker/pulls/alexei-led/k8s-mcp-server.svg)](https://github.com/alexei-led/k8s-mcp-server/pkgs/container/k8s-mcp-server)
 
 K8s MCP Server is a server for [Anthropic's MCP (Model Context Protocol)](https://www.anthropic.com/news/introducing-mcp) that allows running Kubernetes CLI tools such as `kubectl`, `istioctl`, `helm`, and `argocd` in a safe, containerized environment.
 
@@ -136,7 +136,7 @@ For example, to use specific context and namespace, modify your Claude Desktop c
         "K8S_CONTEXT=my-cluster",
         "-e",
         "K8S_NAMESPACE=my-namespace",
-        "ghcr.io/yourusername/k8s-mcp-server:latest"
+        "ghcr.io/alexei-led/k8s-mcp-server:latest"
       ]
     }
   }
@@ -163,7 +163,7 @@ To integrate K8s MCP Server with Claude Desktop, follow these steps:
            "--rm",
            "-v",
            "~/.kube:/home/appuser/.kube:ro",
-           "ghcr.io/yourusername/k8s-mcp-server:latest"
+           "ghcr.io/alexei-led/k8s-mcp-server:latest"
          ]
        }
      }
@@ -634,7 +634,7 @@ k8s-mcp-server/
 
 1. **Setup Development Environment**:
    ```bash
-   git clone https://github.com/yourusername/k8s-mcp-server.git
+   git clone https://github.com/alexei-led/k8s-mcp-server.git
    cd k8s-mcp-server
    uv venv -p 3.13
    source .venv/bin/activate
