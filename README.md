@@ -731,7 +731,7 @@ mcp run src/k8s_mcp_server/server.py
           "-i",
           "--rm",
           "-v",
-          "/Users/YOUR_USER_NAME/.aws:/home/appuser/.aws:ro",
+          "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
           "ghcr.io/alexei-led/k8s-mcp-server:latest"
         ]
       }
