@@ -124,7 +124,7 @@ For example, to use specific context and namespace, modify your Claude Desktop c
 ```json
 {
   "mcpServers": {
-    "kubernetes": {
+    "k8s-mcp-server": {
       "command": "docker",
       "args": [
         "run",
@@ -722,12 +722,19 @@ mcp run src/k8s_mcp_server/server.py
    During development, you can point Claude Desktop to your local server instead of using Docker:
    ```json
    {
-     "mcpServers": {
-       "kubernetes": {
-         "command": "/path/to/your/venv/bin/python",
-         "args": ["-m", "k8s_mcp_server"]
-       }
-     }
+      "mcpServers": {
+      "k8s-mcp-server": {
+        "command": "docker",
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "-v",
+          "/Users/YOUR_USER_NAME/.aws:/home/appuser/.aws:ro",
+          "ghcr.io/alexei-led/k8s-mcp-server:latest"
+        ]
+      }
+    }
    }
    ```
 
