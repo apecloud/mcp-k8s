@@ -17,11 +17,9 @@ WORKDIR /build
 COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
 
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install package and dependencies with uv wheel
-RUN /root/.cargo/bin/uv pip wheel --wheel-dir=/wheels -e .
+# Install package and dependencies with pip wheel
+RUN pip install --no-cache-dir wheel && \
+    pip wheel --no-cache-dir --wheel-dir=/wheels -e .
 
 # =========== FINAL STAGE ===========
 FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION}
@@ -30,19 +28,18 @@ FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION}
 ARG TARGETPLATFORM
 ARG TARGETARCH
 
-# Step 1: Install system packages
+# Step 1: Install system packages - keeping all original packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    unzip \
     curl \
-    apt-transport-https \
-    gnupg \
-    lsb-release \
-    ca-certificates \
+    wget \
+    less \
+    groff \
     jq \
-    yq \
+    gnupg \
     tar \
     gzip \
     zip \
-    unzip \
     vim \
     net-tools \
     dnsutils \
@@ -51,10 +48,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sed \
     gawk \
     findutils \
-    coreutils \
-    procps \
-    wget \
-    xargs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -119,12 +112,9 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
 
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Copy wheels from builder and install with uv
+# Copy wheels from builder and install
 COPY --from=builder /wheels /wheels
-RUN /root/.cargo/bin/uv pip install --no-index --find-links=/wheels k8s-mcp-server && \
+RUN pip install --no-cache-dir --no-index --find-links=/wheels k8s-mcp-server && \
     rm -rf /wheels
 
 # Set ownership after all files have been copied
@@ -142,13 +132,13 @@ ENV HOME="/home/appuser" \
     K8S_MCP_PORT=8080
 
 # Add metadata
-LABEL maintainer="Your Name" \
+LABEL maintainer="Alexei Ledenev" \
       description="Kubernetes Multi-Command Proxy Server" \
-      org.opencontainers.image.source="https://github.com/yourusername/k8s-mcp-server" \
-      org.opencontainers.image.version="1.1.0"
+      org.opencontainers.image.source="https://github.com/alexei-led/k8s-mcp-server" \
+      org.opencontainers.image.version="1.0.0"
 
 # Expose the service port
 EXPOSE 8080
 
 # Set command to run the server
-ENTRYPOINT ["python", "-m", "k8s_mcp_server"]
+ENTRYPOINT ["python", "-m", "k8s_mcp_server", "--tcp", "--host", "0.0.0.0"]
