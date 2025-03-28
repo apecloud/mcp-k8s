@@ -128,8 +128,7 @@ ENV HOME="/home/appuser" \
     PATH="/usr/local/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     K8S_MCP_LOG_DIR=/app/logs \
-    K8S_MCP_HOST=0.0.0.0 \
-    K8S_MCP_PORT=8080
+    K8S_MCP_TRANSPORT=stdio
 
 # Add metadata
 LABEL maintainer="Alexei Ledenev" \
@@ -137,8 +136,8 @@ LABEL maintainer="Alexei Ledenev" \
       org.opencontainers.image.source="https://github.com/alexei-led/k8s-mcp-server" \
       org.opencontainers.image.version="1.0.0"
 
-# Expose the service port
+# Expose the service port (only needed if using SSE transport)
 EXPOSE 8080
 
 # Set command to run the server
-ENTRYPOINT ["python", "-m", "k8s_mcp_server", "--tcp", "--host", "0.0.0.0"]
+ENTRYPOINT ["python", "-m", "k8s_mcp_server"]

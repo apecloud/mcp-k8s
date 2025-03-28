@@ -70,6 +70,7 @@ mcp = FastMCP(
     name="K8s MCP Server",
     instructions=INSTRUCTIONS,
     version=__version__,
+    settings={"cli_status": cli_status},
 )
 
 # Register prompt templates

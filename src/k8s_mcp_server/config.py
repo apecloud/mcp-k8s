@@ -5,6 +5,7 @@ This module contains configuration settings for the K8s MCP Server.
 Environment variables:
 - K8S_MCP_TIMEOUT: Custom timeout in seconds (default: 300)
 - K8S_MCP_MAX_OUTPUT: Maximum output size in characters (default: 100000)
+- K8S_MCP_TRANSPORT: Transport protocol to use ("stdio" or "sse", default: "stdio")
 - K8S_CONTEXT: Kubernetes context to use (default: current context)
 - K8S_NAMESPACE: Kubernetes namespace to use (default: "default")
 """
@@ -15,6 +16,9 @@ from pathlib import Path
 # Command execution settings
 DEFAULT_TIMEOUT = int(os.environ.get("K8S_MCP_TIMEOUT", "300"))
 MAX_OUTPUT_SIZE = int(os.environ.get("K8S_MCP_MAX_OUTPUT", "100000"))
+
+# Server settings
+MCP_TRANSPORT = os.environ.get("K8S_MCP_TRANSPORT", "stdio")  # Transport protocol: stdio or sse
 
 # Kubernetes specific settings
 K8S_CONTEXT = os.environ.get("K8S_CONTEXT", "")  # Empty means use current context
