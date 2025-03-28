@@ -22,7 +22,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "black",
     "ruff",
     "pytest",
     "pytest-asyncio",
