@@ -730,8 +730,9 @@ mcp run src/k8s_mcp_server/server.py
           "run",
           "-i",
           "--rm",
+          "--network=host",
           "-v",
-          "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
+          "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube",
           "ghcr.io/alexei-led/k8s-mcp-server:latest"
         ]
       }
