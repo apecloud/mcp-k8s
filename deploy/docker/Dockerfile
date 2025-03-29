@@ -137,7 +137,7 @@ ENV HOME="/home/appuser" \
 LABEL maintainer="Alexei Ledenev" \
       description="Kubernetes Multi-Command Proxy Server" \
       org.opencontainers.image.source="https://github.com/alexei-led/k8s-mcp-server" \
-      org.opencontainers.image.version="1.0.0"
+      org.opencontainers.image.version="1.1.0"
 
 # Expose the service port (only needed if using SSE transport)
 EXPOSE 8080
