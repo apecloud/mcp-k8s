@@ -111,6 +111,7 @@ WORKDIR /app
 # Copy application code
 COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
+COPY deploy/docker/security_config.yaml ./security_config.yaml
 
 # Copy wheels from builder and install
 COPY --from=builder /wheels /wheels
@@ -128,7 +129,9 @@ ENV HOME="/home/appuser" \
     PATH="/usr/local/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     K8S_MCP_LOG_DIR=/app/logs \
-    K8S_MCP_TRANSPORT=stdio
+    K8S_MCP_TRANSPORT=stdio \
+    K8S_MCP_SECURITY_MODE=strict \
+    K8S_MCP_SECURITY_CONFIG=/app/security_config.yaml
 
 # Add metadata
 LABEL maintainer="Alexei Ledenev" \

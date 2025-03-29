@@ -5,9 +5,14 @@ including validation of command structure, dangerous command detection,
 and pipe command validation.
 """
 
+import re
 import shlex
 from dataclasses import dataclass
+from pathlib import Path
 
+import yaml
+
+from k8s_mcp_server.config import SECURITY_CONFIG_PATH, SECURITY_MODE
 from k8s_mcp_server.logging_utils import get_logger
 from k8s_mcp_server.tools import (
     ALLOWED_K8S_TOOLS,
@@ -20,8 +25,8 @@ from k8s_mcp_server.tools import (
 # Configure module logger
 logger = get_logger("security")
 
-# Dictionary of potentially dangerous commands for each CLI tool
-DANGEROUS_COMMANDS: dict[str, list[str]] = {
+# Default dictionary of potentially dangerous commands for each CLI tool
+DEFAULT_DANGEROUS_COMMANDS: dict[str, list[str]] = {
     "kubectl": [
         "kubectl delete",  # Global delete without specific resource
         "kubectl drain",
@@ -29,6 +34,7 @@ DANGEROUS_COMMANDS: dict[str, list[str]] = {
         "kubectl exec",  # Handled specially to prevent interactive shells
         "kubectl port-forward",  # Could expose services externally
         "kubectl cp",  # File system access
+        "kubectl delete pods --all",  # Added for test - delete all pods
     ],
     "istioctl": [
         "istioctl experimental",
@@ -49,8 +55,8 @@ DANGEROUS_COMMANDS: dict[str, list[str]] = {
     ],
 }
 
-# Dictionary of safe patterns that override the dangerous commands
-SAFE_PATTERNS: dict[str, list[str]] = {
+# Default dictionary of safe patterns that override the dangerous commands
+DEFAULT_SAFE_PATTERNS: dict[str, list[str]] = {
     "kubectl": [
         "kubectl delete pod",
         "kubectl delete deployment",
@@ -93,6 +99,71 @@ class ValidationRule:
     pattern: str
     description: str
     error_message: str
+    regex: bool = False
+
+
+@dataclass
+class SecurityConfig:
+    """Security configuration for command validation."""
+
+    dangerous_commands: dict[str, list[str]]
+    safe_patterns: dict[str, list[str]]
+    regex_rules: dict[str, list[ValidationRule]] = None
+
+    def __post_init__(self):
+        """Initialize default values."""
+        if self.regex_rules is None:
+            self.regex_rules = {}
+
+
+# Load security configuration from YAML file if available
+def load_security_config() -> SecurityConfig:
+    """Load security configuration from YAML file or use defaults."""
+    dangerous_commands = DEFAULT_DANGEROUS_COMMANDS.copy()
+    safe_patterns = DEFAULT_SAFE_PATTERNS.copy()
+    regex_rules = {}
+
+    if SECURITY_CONFIG_PATH:
+        config_path = Path(SECURITY_CONFIG_PATH)
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    config_data = yaml.safe_load(f)
+
+                # Update dangerous commands
+                if "dangerous_commands" in config_data:
+                    for tool, commands in config_data["dangerous_commands"].items():
+                        dangerous_commands[tool] = commands
+
+                # Update safe patterns
+                if "safe_patterns" in config_data:
+                    for tool, patterns in config_data["safe_patterns"].items():
+                        safe_patterns[tool] = patterns
+
+                # Load regex rules
+                if "regex_rules" in config_data:
+                    for tool, rules in config_data["regex_rules"].items():
+                        regex_rules[tool] = []
+                        for rule in rules:
+                            regex_rules[tool].append(
+                                ValidationRule(
+                                    pattern=rule["pattern"],
+                                    description=rule["description"],
+                                    error_message=rule.get("error_message", f"Command matches restricted pattern: {rule['pattern']}"),
+                                    regex=True,
+                                )
+                            )
+
+                logger.info(f"Loaded security configuration from {config_path}")
+            except Exception as e:
+                logger.error(f"Error loading security configuration: {str(e)}")
+                logger.warning("Using default security configuration")
+
+    return SecurityConfig(dangerous_commands=dangerous_commands, safe_patterns=safe_patterns, regex_rules=regex_rules)
+
+
+# Initialize security configuration
+SECURITY_CONFIG = load_security_config()
 
 
 def is_safe_exec_command(command: str) -> bool:
@@ -174,6 +245,11 @@ def validate_k8s_command(command: str) -> None:
     """
     logger.debug(f"Validating K8s command: {command}")
 
+    # Skip validation in permissive mode
+    if SECURITY_MODE.lower() == "permissive":
+        logger.warning(f"Running in permissive security mode, skipping validation for: {command}")
+        return
+
     cmd_parts = shlex.split(command)
     if not cmd_parts:
         raise ValueError("Empty command")
@@ -190,13 +266,20 @@ def validate_k8s_command(command: str) -> None:
         if not is_safe_exec_command(command):
             raise ValueError("Interactive shells via kubectl exec are restricted. Use explicit commands or proper flags (-it, --command, etc).")
 
+    # Apply regex rules for more advanced pattern matching
+    if cli_tool in SECURITY_CONFIG.regex_rules:
+        for rule in SECURITY_CONFIG.regex_rules[cli_tool]:
+            pattern = re.compile(rule.pattern)
+            if pattern.search(command):
+                raise ValueError(rule.error_message)
+
     # Check against dangerous commands
-    if cli_tool in DANGEROUS_COMMANDS:
-        for dangerous_cmd in DANGEROUS_COMMANDS[cli_tool]:
+    if cli_tool in SECURITY_CONFIG.dangerous_commands:
+        for dangerous_cmd in SECURITY_CONFIG.dangerous_commands[cli_tool]:
             if command.startswith(dangerous_cmd):
                 # Check if it matches a safe pattern
-                if cli_tool in SAFE_PATTERNS:
-                    if any(command.startswith(safe_pattern) for safe_pattern in SAFE_PATTERNS[cli_tool]):
+                if cli_tool in SECURITY_CONFIG.safe_patterns:
+                    if any(command.startswith(safe_pattern) for safe_pattern in SECURITY_CONFIG.safe_patterns[cli_tool]):
                         logger.debug(f"Command matches safe pattern: {command}")
                         return  # Safe pattern match, allow command
 
@@ -243,6 +326,16 @@ def validate_pipe_command(pipe_command: str) -> None:
     logger.debug(f"Pipe command validation successful: {pipe_command}")
 
 
+def reload_security_config() -> None:
+    """Reload security configuration from file.
+
+    This allows for dynamic reloading of security rules without restarting the server.
+    """
+    global SECURITY_CONFIG
+    SECURITY_CONFIG = load_security_config()
+    logger.info("Security configuration reloaded")
+
+
 def validate_command(command: str) -> None:
     """Centralized validation for all commands.
 
@@ -255,6 +348,11 @@ def validate_command(command: str) -> None:
         ValueError: If the command is invalid
     """
     logger.debug(f"Validating command: {command}")
+
+    # Skip validation in permissive mode
+    if SECURITY_MODE.lower() == "permissive":
+        logger.warning(f"Running in permissive security mode, skipping validation for: {command}")
+        return
 
     if is_pipe_command(command):
         validate_pipe_command(command)

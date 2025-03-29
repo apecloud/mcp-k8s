@@ -25,49 +25,40 @@ async def assert_command_executed(mock_obj, expected_command=None):
     return mock_obj.call_args
 
 
-def create_test_pod_manifest(namespace, name="test-pod", image="nginx:alpine", labels=None, annotations=None):
+def create_test_pod_manifest(name="test-pod", namespace=None, image="nginx:alpine", labels=None, annotations=None):
     """Create a test pod manifest for integration tests.
 
     Args:
-        namespace: Kubernetes namespace
         name: Pod name
+        namespace: Kubernetes namespace
         image: Container image
         labels: Optional dict of labels to add
         annotations: Optional dict of annotations to add
 
     Returns:
-        YAML manifest as string
+        Dictionary with the pod manifest
     """
-    # Format labels if provided
-    labels_yaml = ""
+    metadata = {"name": name}
+
+    if namespace:
+        metadata["namespace"] = namespace
+
     if labels:
-        labels_yaml = "  labels:\n"
-        for k, v in labels.items():
-            labels_yaml += f"    {k}: {v}\n"
+        metadata["labels"] = labels
 
-    # Format annotations if provided
-    annotations_yaml = ""
     if annotations:
-        annotations_yaml = "  annotations:\n"
-        for k, v in annotations.items():
-            annotations_yaml += f"    {k}: {v}\n"
+        metadata["annotations"] = annotations
 
-    return f"""apiVersion: v1
-kind: Pod
-metadata:
-  name: {name}
-  namespace: {namespace}
-{labels_yaml}{annotations_yaml}spec:
-  containers:
-  - name: {name.replace("-", "")}
-    image: {image}
-    resources:
-      limits:
-        memory: "128Mi"
-        cpu: "100m"
-    ports:
-    - containerPort: 80
-"""
+    return {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": metadata,
+        "spec": {
+            "containers": [
+                {"name": name.replace("-", ""), "image": image, "resources": {"limits": {"memory": "128Mi", "cpu": "100m"}}, "ports": [{"containerPort": 80}]}
+            ]
+        },
+    }
 
 
 def create_test_deployment_manifest(namespace, name="test-deployment", replicas=1, image="nginx:alpine", labels=None):

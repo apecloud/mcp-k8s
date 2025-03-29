@@ -8,6 +8,8 @@ Environment variables:
 - K8S_MCP_TRANSPORT: Transport protocol to use ("stdio" or "sse", default: "stdio")
 - K8S_CONTEXT: Kubernetes context to use (default: current context)
 - K8S_NAMESPACE: Kubernetes namespace to use (default: "default")
+- K8S_MCP_SECURITY_MODE: Security mode for command validation ("strict", "permissive", default: "strict")
+- K8S_MCP_SECURITY_CONFIG: Path to YAML config file for security rules (default: None)
 """
 
 import os
@@ -23,6 +25,10 @@ MCP_TRANSPORT = os.environ.get("K8S_MCP_TRANSPORT", "stdio")  # Transport protoc
 # Kubernetes specific settings
 K8S_CONTEXT = os.environ.get("K8S_CONTEXT", "")  # Empty means use current context
 K8S_NAMESPACE = os.environ.get("K8S_NAMESPACE", "default")
+
+# Security settings
+SECURITY_MODE = os.environ.get("K8S_MCP_SECURITY_MODE", "strict")  # strict or permissive
+SECURITY_CONFIG_PATH = os.environ.get("K8S_MCP_SECURITY_CONFIG", None)
 
 # Supported CLI tools
 SUPPORTED_CLI_TOOLS = {

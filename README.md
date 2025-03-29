@@ -119,6 +119,8 @@ K8s MCP Server can be configured via environment variables that can be passed to
 | `K8S_MCP_TRANSPORT` | Transport protocol to use ("stdio" or "sse") | `stdio` | No |
 | `K8S_CONTEXT` | Kubernetes context to use | *current context* | No |
 | `K8S_NAMESPACE` | Default Kubernetes namespace | `default` | No |
+| `K8S_MCP_SECURITY_MODE` | Security mode ("strict" or "permissive") | `strict` | No |
+| `K8S_MCP_SECURITY_CONFIG` | Path to security configuration YAML file | `None` | No |
 
 For example, to use specific context and namespace, modify your Claude Desktop configuration:
 
@@ -137,6 +139,56 @@ For example, to use specific context and namespace, modify your Claude Desktop c
         "K8S_CONTEXT=my-cluster",
         "-e",
         "K8S_NAMESPACE=my-namespace",
+        "ghcr.io/alexei-led/k8s-mcp-server:latest"
+      ]
+    }
+  }
+}
+```
+
+#### Using Custom Security Configuration
+
+To use a custom security configuration file, mount it into the container and set the environment variable:
+
+```json
+{
+  "mcpServers": {
+    "k8s-mcp-server": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "~/.kube:/home/appuser/.kube:ro",
+        "-v",
+        "/path/to/my-security-config.yaml:/app/security_config.yaml:ro",
+        "-e",
+        "K8S_MCP_SECURITY_CONFIG=/app/security_config.yaml",
+        "ghcr.io/alexei-led/k8s-mcp-server:latest"
+      ]
+    }
+  }
+}
+```
+
+#### Running in Permissive Mode
+
+To run in permissive mode (allow all commands, including potentially dangerous ones):
+
+```json
+{
+  "mcpServers": {
+    "k8s-mcp-server": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "~/.kube:/home/appuser/.kube:ro",
+        "-e",
+        "K8S_MCP_SECURITY_MODE=permissive",
         "ghcr.io/alexei-led/k8s-mcp-server:latest"
       ]
     }
@@ -237,6 +289,48 @@ All execution tools support Unix command piping to filter and transform output:
 ```python
 execute_kubectl(command="get pods -o json | jq '.items[].metadata.name'")
 execute_helm(command="list | grep nginx")
+```
+
+### Configuration Options
+
+#### Environment Variables
+
+| Variable | Description | Default | Notes |
+|----------|-------------|---------|-------|
+| `K8S_MCP_TIMEOUT` | Command execution timeout (seconds) | 300 | Applies to all commands |
+| `K8S_MCP_MAX_OUTPUT` | Maximum output size (characters) | 100000 | Truncates output if exceeded |
+| `K8S_MCP_TRANSPORT` | Transport protocol | "stdio" | "stdio" or "sse" |
+| `K8S_CONTEXT` | Kubernetes context | current | Uses kubectl current-context if empty |
+| `K8S_NAMESPACE` | Default namespace | "default" | Applied to all commands |
+| `K8S_MCP_SECURITY_MODE` | Security validation mode | "strict" | "strict" or "permissive" |
+| `K8S_MCP_SECURITY_CONFIG` | Path to security config file | None | YAML configuration file |
+
+#### Security Configuration File Format
+
+The security configuration file uses YAML format with the following structure:
+
+```yaml
+# Dangerous command prefixes (prefix-based matching)
+dangerous_commands:
+  kubectl:
+    - "kubectl delete"
+    - "kubectl drain"
+    # ...more dangerous commands
+
+# Safe pattern exceptions (prefix-based matching)
+safe_patterns:
+  kubectl:
+    - "kubectl delete pod"
+    - "kubectl delete deployment"
+    # ...more safe patterns
+
+# Advanced regex pattern rules
+regex_rules:
+  kubectl:
+    - pattern: "kubectl\\s+delete\\s+(-[A-Za-z]+\\s+)*--all\\b"
+      description: "Deleting all resources of a type"
+      error_message: "Custom error message shown to the user"
+    # ...more regex rules
 ```
 
 ## Supported Tools and Commands
@@ -554,6 +648,138 @@ The server includes several safety features:
 - **Non-root execution**: All processes run as a non-root user inside the container
 - **Command validation**: Potentially dangerous commands require explicit resource names
 - **Context separation**: Automatic context and namespace injection for commands
+
+### Security Modes and Configuration
+
+K8s MCP Server supports two security modes and customizable security rules:
+
+- **Strict Mode** (default): All commands are validated against security rules
+- **Permissive Mode**: Security validation is skipped, allowing all commands to execute
+
+#### Setting Security Mode
+
+To run in permissive mode (allow all commands):
+
+```json
+{
+  "mcpServers": {
+    "k8s-mcp-server": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "~/.kube:/home/appuser/.kube:ro",
+        "-e",
+        "K8S_MCP_SECURITY_MODE=permissive",
+        "ghcr.io/alexei-led/k8s-mcp-server:latest"
+      ]
+    }
+  }
+}
+```
+
+#### Customizing Security Rules
+
+Security rules can be customized using a YAML configuration file. This allows for more flexibility than the built-in rules.
+
+1. **Create a Security Configuration File**:
+   Create a YAML file with your custom rules (e.g., `security_config.yaml`):
+
+   ```yaml
+   # Security configuration for k8s-mcp-server
+   
+   # Potentially dangerous command patterns (prefix-based)
+   dangerous_commands:
+     kubectl:
+       - "kubectl delete"
+       - "kubectl drain"
+       # Add your custom dangerous commands here
+   
+   # Safe pattern overrides (prefix-based)
+   safe_patterns:
+     kubectl:
+       - "kubectl delete pod"
+       - "kubectl delete deployment"
+       # Add your custom safe patterns here
+   
+   # Advanced regex pattern rules
+   regex_rules:
+     kubectl:
+       - pattern: "kubectl\\s+delete\\s+(-[A-Za-z]+\\s+)*--all\\b"
+         description: "Deleting all resources of a type"
+         error_message: "Deleting all resources is restricted. Specify individual resources to delete."
+       # Add your custom regex rules here
+   ```
+
+2. **Mount the Configuration File in Docker**:
+   ```json
+   {
+     "mcpServers": {
+       "k8s-mcp-server": {
+         "command": "docker",
+         "args": [
+           "run",
+           "-i",
+           "--rm",
+           "-v",
+           "~/.kube:/home/appuser/.kube:ro",
+           "-v",
+           "/path/to/security_config.yaml:/security_config.yaml:ro",
+           "-e",
+           "K8S_MCP_SECURITY_CONFIG=/security_config.yaml",
+           "ghcr.io/alexei-led/k8s-mcp-server:latest"
+         ]
+       }
+     }
+   }
+   ```
+
+#### Configuration Structure
+
+The security configuration YAML file has three main sections:
+
+1. **dangerous_commands**: Dictionary of command prefixes that are considered dangerous for each tool
+2. **safe_patterns**: Dictionary of command prefixes that override dangerous commands (exceptions)
+3. **regex_rules**: Advanced regex patterns for more complex validation rules
+
+Each regex rule should include:
+- **pattern**: Regular expression pattern to match against commands
+- **description**: Description of what the rule checks for
+- **error_message**: Custom error message to display when the rule is violated
+
+#### Examples
+
+**Example 1: Restricting Namespace Operations**
+
+```yaml
+regex_rules:
+  kubectl:
+    - pattern: "kubectl\\s+.*\\s+--namespace=kube-system\\b"
+      description: "Operations in kube-system namespace"
+      error_message: "Operations in kube-system namespace are restricted."
+```
+
+**Example 2: Allowing Additional Safe Patterns**
+
+```yaml
+safe_patterns:
+  kubectl:
+    - "kubectl delete pod"
+    - "kubectl delete job"
+    - "kubectl delete cronjob"
+```
+
+**Example 3: Restricting Dangerous File System Access**
+
+```yaml
+regex_rules:
+  kubectl:
+    - pattern: "kubectl\\s+exec\\s+.*\\s+-[^-]*c\\s+.*(rm|mv|cp|curl|wget|chmod)\\b"
+      description: "Dangerous file operations in exec"
+      error_message: "File system operations within kubectl exec are restricted."
+```
 
 ## Project Architecture and Code Structure
 

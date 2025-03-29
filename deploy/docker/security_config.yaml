@@ -1,0 +1,89 @@
+# K8s MCP Server Security Configuration
+# This is a template for customizing security rules.
+# To use this file, uncomment the relevant sections in docker-compose.yml.
+
+# Potentially dangerous command patterns (prefix-based)
+dangerous_commands:
+  kubectl:
+    - "kubectl delete"
+    - "kubectl drain"
+    - "kubectl replace --force"
+    - "kubectl exec"
+    - "kubectl port-forward"
+    - "kubectl cp"
+    - "kubectl cordon"
+    - "kubectl uncordon"
+    - "kubectl taint"
+  istioctl:
+    - "istioctl experimental"
+    - "istioctl proxy-config"
+    - "istioctl dashboard"
+  helm:
+    - "helm delete"
+    - "helm uninstall"
+    - "helm rollback"
+    - "helm upgrade"
+  argocd:
+    - "argocd app delete"
+    - "argocd cluster rm"
+    - "argocd repo rm"
+    - "argocd app set"
+
+# Safe pattern overrides (prefix-based)
+safe_patterns:
+  kubectl:
+    - "kubectl delete pod"
+    - "kubectl delete deployment"
+    - "kubectl delete service"
+    - "kubectl delete configmap"
+    - "kubectl delete secret"
+    - "kubectl exec --help"
+    - "kubectl exec -it"
+    - "kubectl exec pod"
+    - "kubectl exec deployment"
+    - "kubectl port-forward --help"
+    - "kubectl cp --help"
+  istioctl:
+    - "istioctl experimental -h"
+    - "istioctl experimental --help"
+    - "istioctl proxy-config --help"
+    - "istioctl dashboard --help"
+  helm:
+    - "helm delete --help"
+    - "helm uninstall --help"
+    - "helm rollback --help"
+    - "helm upgrade --help"
+  argocd:
+    - "argocd app delete --help"
+    - "argocd cluster rm --help"
+    - "argocd repo rm --help"
+    - "argocd app set --help"
+
+# Advanced regex pattern rules for more complex validations
+regex_rules:
+  kubectl:
+    # Prevent deleting all resources at once
+    - pattern: "kubectl\\s+delete\\s+(-[A-Za-z]+\\s+)*--all\\b"
+      description: "Deleting all resources of a type"
+      error_message: "Deleting all resources is restricted. Specify individual resources to delete."
+    
+    # Prevent operations across all namespaces
+    - pattern: "kubectl\\s+delete\\s+(-[A-Za-z]+\\s+)*--all-namespaces\\b"
+      description: "Deleting resources in all namespaces"
+      error_message: "Deleting resources across all namespaces is restricted."
+    
+    # Restrict dangerous file operations via kubectl exec
+    - pattern: "kubectl\\s+exec\\s+.*\\s+-[^-]*c\\s+.*(rm|mv|cp|curl|wget|chmod)\\b"
+      description: "Dangerous file operations in exec"
+      error_message: "File system operations within kubectl exec are restricted."
+    
+    # Restrict operations in kube-system namespace
+    - pattern: "kubectl\\s+.*\\s+--namespace=kube-system\\b"
+      description: "Operations in kube-system namespace"
+      error_message: "Operations in kube-system namespace are restricted."
+    
+  helm:
+    # Prevent uninstalling with skipped hooks
+    - pattern: "helm\\s+uninstall\\s+.*\\s+--no-hooks\\b"
+      description: "Helm uninstall without hooks"
+      error_message: "Using --no-hooks with helm uninstall is restricted as it may skip important cleanup."

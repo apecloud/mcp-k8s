@@ -11,9 +11,18 @@ services:
     #   - "8080:8080"
     volumes:
       - ~/.kube:/home/appuser/.kube:ro # Mount Kubernetes configs as read-only
+      # Uncomment to use custom security config
+      # - ./security_config.yaml:/security_config.yaml:ro
     environment:
+      # Kubernetes settings
       - K8S_CONTEXT=  # Leave empty to use current context or specify a context
       - K8S_NAMESPACE=default # Default namespace for commands
+      
+      # Security settings
+      # - K8S_MCP_SECURITY_MODE=strict # strict (default) or permissive
+      # - K8S_MCP_SECURITY_CONFIG=/security_config.yaml
+      
+      # Server settings
       - K8S_MCP_TIMEOUT=300 # Default timeout in seconds
       # - K8S_MCP_MAX_OUTPUT=100000 # Uncomment to set max output size
       - K8S_MCP_TRANSPORT=stdio # Transport protocol (stdio or sse)
