@@ -6,7 +6,6 @@
 
 # Docker
 .dockerignore
-deploy/
 docker-compose*.yml
 Dockerfile*
 
