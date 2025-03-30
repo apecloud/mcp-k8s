@@ -2,7 +2,7 @@
 
 [![CI Status](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/ci.yml)
 [![Release Status](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/release.yml/badge.svg)](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/release.yml)
-[![codecov](https://codecov.io/gh/alexei-led/k8s-mcp-server/branch/main/graph/badge.svg)](https://codecov.io/gh/alexei-led/k8s-mcp-server)
+[![codecov](https://codecov.io/gh/alexei-led/k8s-mcp-server/graph/badge.svg?token=eCaXPJ0olS)](https://codecov.io/gh/alexei-led/k8s-mcp-server)
 [![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docker Pulls](https://img.shields.io/docker/pulls/alexei-led/k8s-mcp-server.svg)](https://github.com/alexei-led/k8s-mcp-server/pkgs/container/k8s-mcp-server)
