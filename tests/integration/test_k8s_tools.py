@@ -6,6 +6,7 @@ rather than setting up a cluster during the tests.
 """
 
 import json
+import logging
 import os
 import subprocess
 import tempfile
@@ -18,7 +19,6 @@ from typing import Any
 import pytest
 import yaml
 
-from k8s_mcp_server.logging_utils import get_logger
 from k8s_mcp_server.server import (
     describe_argocd,
     describe_helm,
@@ -31,8 +31,7 @@ from k8s_mcp_server.server import (
 )
 from tests.helpers import create_test_pod_manifest, wait_for_pod_ready
 
-# Configure logger for tests
-logger = get_logger("integration_tests")
+logger = logging.getLogger(__name__)
 
 
 # Setup test reporting to capture test results for better diagnostics

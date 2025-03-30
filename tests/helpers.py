@@ -2,16 +2,14 @@
 
 import asyncio
 import json
+import logging
 import os
 import subprocess
 import time
 from pathlib import Path
 from typing import Any
 
-from k8s_mcp_server.logging_utils import get_logger
-
-# Configure logger
-logger = get_logger("test_helpers")
+logger = logging.getLogger(__name__)
 
 
 async def assert_command_executed(mock_obj, expected_command=None):

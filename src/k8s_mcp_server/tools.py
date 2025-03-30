@@ -9,11 +9,6 @@ import shlex
 from dataclasses import dataclass
 from typing import Literal, NotRequired, TypedDict
 
-from k8s_mcp_server.logging_utils import get_logger
-
-# Configure module logger
-logger = get_logger("tools")
-
 # List of allowed Unix commands that can be used in a pipe
 ALLOWED_UNIX_COMMANDS = [
     # File operations

@@ -6,6 +6,7 @@ and documentation.
 """
 
 import asyncio
+import logging
 import sys
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -26,13 +27,10 @@ from k8s_mcp_server.errors import (
     CommandValidationError,
     create_error_result,
 )
-from k8s_mcp_server.logging_utils import configure_root_logger, get_logger
 from k8s_mcp_server.prompts import register_prompts
 from k8s_mcp_server.tools import CommandHelpResult, CommandResult
 
-# Configure logging
-configure_root_logger()
-logger = get_logger("server")
+logger = logging.getLogger(__name__)
 
 
 # Function to run startup checks in synchronous context
@@ -305,7 +303,9 @@ async def describe_argocd(
 
 
 # Tool-specific command execution functions
-@mcp.tool()
+@mcp.tool(
+    description="Execute kubectl commands with support for Unix pipes.",
+)
 async def execute_kubectl(
     command: str = Field(description="Complete kubectl command to execute (including any pipes and flags)"),
     timeout: int | None = Field(description="Maximum execution time in seconds (default: 300)", default=None),
@@ -338,7 +338,9 @@ async def execute_kubectl(
     return await _execute_tool_command("kubectl", command, timeout, ctx)
 
 
-@mcp.tool()
+@mcp.tool(
+    description="Execute Helm commands with support for Unix pipes.",
+)
 async def execute_helm(
     command: str = Field(description="Complete Helm command to execute (including any pipes and flags)"),
     timeout: int | None = Field(description="Maximum execution time in seconds (default: 300)", default=None),
@@ -370,7 +372,9 @@ async def execute_helm(
     return await _execute_tool_command("helm", command, timeout, ctx)
 
 
-@mcp.tool()
+@mcp.tool(
+    description="Execute Istio commands with support for Unix pipes.",
+)
 async def execute_istioctl(
     command: str = Field(description="Complete Istio command to execute (including any pipes and flags)"),
     timeout: int | None = Field(description="Maximum execution time in seconds (default: 300)", default=None),
@@ -402,7 +406,9 @@ async def execute_istioctl(
     return await _execute_tool_command("istioctl", command, timeout, ctx)
 
 
-@mcp.tool()
+@mcp.tool(
+    description="Execute ArgoCD commands with support for Unix pipes.",
+)
 async def execute_argocd(
     command: str = Field(description="Complete ArgoCD command to execute (including any pipes and flags)"),
     timeout: int | None = Field(description="Maximum execution time in seconds (default: 300)", default=None),

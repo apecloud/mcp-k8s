@@ -83,7 +83,3 @@ Use the built-in prompt templates for common Kubernetes tasks:
 
 # Application paths
 BASE_DIR = Path(__file__).parent.parent.parent
-LOG_DIR = Path(os.environ.get("K8S_MCP_LOG_DIR", str(BASE_DIR / "logs")))
-
-# Ensure log directory exists
-LOG_DIR.mkdir(exist_ok=True, parents=True)

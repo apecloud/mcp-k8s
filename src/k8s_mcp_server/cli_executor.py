@@ -7,6 +7,7 @@ validation, context/namespace injection, and resource limitations.
 """
 
 import asyncio
+import logging
 import shlex
 import time
 
@@ -23,7 +24,6 @@ from k8s_mcp_server.errors import (
     CommandTimeoutError,
     CommandValidationError,
 )
-from k8s_mcp_server.logging_utils import get_logger
 from k8s_mcp_server.security import validate_command
 from k8s_mcp_server.tools import (
     CommandHelpResult,
@@ -32,8 +32,7 @@ from k8s_mcp_server.tools import (
     split_pipe_command,
 )
 
-# Configure module logger
-logger = get_logger("cli_executor")
+logger = logging.getLogger(__name__)
 
 
 async def check_cli_installed(cli_tool: str) -> bool:

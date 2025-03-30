@@ -128,7 +128,6 @@ USER appuser
 ENV HOME="/home/appuser" \
     PATH="/usr/local/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
-    K8S_MCP_LOG_DIR=/app/logs \
     K8S_MCP_TRANSPORT=stdio \
     K8S_MCP_SECURITY_MODE=strict \
     K8S_MCP_SECURITY_CONFIG=/app/security_config.yaml

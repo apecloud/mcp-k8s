@@ -5,6 +5,7 @@ including validation of command structure, dangerous command detection,
 and pipe command validation.
 """
 
+import logging
 import re
 import shlex
 from dataclasses import dataclass
@@ -13,7 +14,6 @@ from pathlib import Path
 import yaml
 
 from k8s_mcp_server.config import SECURITY_CONFIG_PATH, SECURITY_MODE
-from k8s_mcp_server.logging_utils import get_logger
 from k8s_mcp_server.tools import (
     ALLOWED_K8S_TOOLS,
     is_pipe_command,
@@ -22,8 +22,7 @@ from k8s_mcp_server.tools import (
     validate_unix_command,
 )
 
-# Configure module logger
-logger = get_logger("security")
+logger = logging.getLogger(__name__)
 
 # Default dictionary of potentially dangerous commands for each CLI tool
 DEFAULT_DANGEROUS_COMMANDS: dict[str, list[str]] = {
