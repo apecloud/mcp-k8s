@@ -1,4 +1,4 @@
-.PHONY: install dev-install lint test clean docker-build docker-run docker-compose
+.PHONY: install dev-install lint lint-fix format test clean docker-build docker-run docker-compose
 
 # Python related commands with uv
 install:
@@ -10,6 +10,10 @@ dev-install:
 lint:
 	ruff check .
 	ruff format --check .
+
+lint-fix:
+	ruff check --fix .
+	ruff format .
 
 format:
 	ruff format .
@@ -58,6 +62,7 @@ help:
 	@echo "  install         - Install the package using uv"
 	@echo "  dev-install     - Install the package with development dependencies using uv"
 	@echo "  lint            - Run linters (ruff)"
+	@echo "  lint-fix        - Run linters with automatic fixes"
 	@echo "  format          - Format code with ruff"
 	@echo "  test            - Run unit tests only (default)"
 	@echo "  test-all        - Run all tests including integration tests"

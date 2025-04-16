@@ -476,22 +476,32 @@ async def test_execute_command_with_pipe():
     # Mock the validation and subprocess functions
     with patch("k8s_mcp_server.cli_executor.validate_command"):
         with patch("k8s_mcp_server.cli_executor.is_pipe_command", return_value=True):
-            with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_subprocess:
-                # Setup process mock
-                process_mock = AsyncMock()
-                process_mock.returncode = 0
-                process_mock.communicate = AsyncMock(return_value=(b"Command output", b""))
-                mock_subprocess.return_value = process_mock
+            with patch("k8s_mcp_server.cli_executor.split_pipe_command", return_value=["kubectl get pods", "grep nginx"]):
+                # Setup process mocks for each command in the pipe
+                with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_subprocess:
+                    # Create process mocks
+                    first_process_mock = AsyncMock()
+                    first_process_mock.stdout = AsyncMock()
+                    first_process_mock.returncode = 0
 
-            # Mock context injection
-            with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods --context=test"):
-                # Mock response directly
-                with patch("k8s_mcp_server.cli_executor.execute_command") as mock_execute:
-                    mock_execute.return_value = {"status": "success", "output": "Command output"}
-                    # Test with a pipe command
-                    result = await execute_command("kubectl get pods | grep nginx")
-                    assert result["status"] == "success"
-                    assert result["output"] == "Command output"
+                    last_process_mock = AsyncMock()
+                    last_process_mock.returncode = 0
+                    last_process_mock.communicate = AsyncMock(return_value=(b"Command output", b""))
+
+                    # Configure mock to return different values on different calls
+                    mock_subprocess.side_effect = [first_process_mock, last_process_mock]
+
+                    # Mock context injection
+                    with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods --context=test"):
+                        # Test with a pipe command
+                        result = await execute_command("kubectl get pods | grep nginx")
+
+                        # Verify the result
+                        assert result["status"] == "success"
+                        assert result["output"] == "Command output"
+
+                        # Verify both processes were created
+                        assert mock_subprocess.call_count == 2
 
 
 @pytest.mark.asyncio
