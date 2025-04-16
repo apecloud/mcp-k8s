@@ -229,10 +229,10 @@ def test_inject_context_namespace_error_handling():
 
             # Test with empty command
             assert inject_context_namespace("") == ""
-            
+
             # Test with non-kubectl/istioctl command
             assert inject_context_namespace("helm list") == "helm list"
-            
+
             # Test without shlex.join (Python < 3.8 compatibility)
             with patch("k8s_mcp_server.cli_executor.shlex.join", side_effect=ImportError):
                 # Command with spaces that needs quoting
@@ -753,8 +753,8 @@ async def test_get_command_help():
     for cli_tool in ["helm", "istioctl", "argocd"]:
         with patch("k8s_mcp_server.cli_executor.execute_command", new_callable=AsyncMock) as mock_execute:
             mock_execute.return_value = {"status": "success", "output": f"{cli_tool} help text"}
-            
+
             result = await get_command_help(cli_tool, "list")
-            
+
             assert result.help_text == f"{cli_tool} help text"
             mock_execute.assert_called_once_with(f"{cli_tool} list --help")
