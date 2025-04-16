@@ -72,7 +72,7 @@ jobs:
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           
           # Install istioctl (latest version)
-          ISTIO_VERSION=$(curl -sL https://github.com/istio/istio/releases/latest | grep -o "v[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1)
+          ISTIO_VERSION=$(curl -s https://api.github.com/repos/istio/istio/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
           curl -L https://istio.io/downloadIstio | ISTIO_VERSION=${ISTIO_VERSION} sh -
           sudo mv istio-${ISTIO_VERSION}/bin/istioctl /usr/local/bin/
           
