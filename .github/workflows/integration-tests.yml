@@ -64,15 +64,11 @@ jobs:
       - name: Create KWOK Cluster
         run: |
           # Create a KWOK cluster for testing with specific Kubernetes version
-          kwokctl create cluster --name=kwok-test
+          kwokctl create cluster --name=kwok-test --wait=1m
           
           # Set KUBECONFIG environment variable
           echo "KUBECONFIG=$(kwokctl get kubeconfig --name=kwok-test)" >> $GITHUB_ENV
           
-          # Verify cluster is running
-          kubectl cluster-info
-          kubectl get nodes
-
       - name: Install K8s CLI tools
         run: |
           # Install Helm
