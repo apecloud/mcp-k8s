@@ -50,11 +50,16 @@ jobs:
           # Install dependencies using uv with the lock file and the --system flag
           uv pip install --system -e ".[dev]"
 
-      - name: Set up KWOK
-        uses: kubernetes-sigs/kwok@main
-        with:
-          command: kwokctl
-          kwok-version: latest  # Optional: specify version or use latest
+      - name: Install KWOK tool
+        run: |
+          # KWOK repository
+          KWOK_REPO=kubernetes-sigs/kwok
+          # Get latest
+          KWOK_LATEST_RELEASE=$(curl "https://api.github.com/repos/${KWOK_REPO}/releases/latest" | jq -r '.tag_name')
+          
+          wget -O kwokctl -c "https://github.com/${KWOK_REPO}/releases/download/${KWOK_LATEST_RELEASE}/kwokctl-linux-amd64"
+          chmod +x kwokctl
+          sudo mv kwokctl /usr/local/bin/kwokctl
 
       - name: Create KWOK Cluster
         run: |
