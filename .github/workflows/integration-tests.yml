@@ -39,45 +39,40 @@ jobs:
 
       - name: Install uv
         run: |
+          # Install uv using the official installation method
           curl -LsSf https://astral.sh/uv/install.sh | sh
 
-      - name: Setup uv cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/uv
-            ~/.uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml') }}
+          # Add uv to PATH
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      - name: Install dependencies
+      - name: Install dependencies using uv
         run: |
-          uv pip install -e ".[dev]"
+          # Install dependencies using uv with the lock file and the --system flag
+          uv pip install --system -e ".[dev]"
 
-      - name: Set up KWOK
-        uses: kubernetes-sigs/kwok@main
-        with:
-          command: kwokctl
-          kwok-version: latest  # Optional: specify version or use latest
+      - name: Install KWOK tool
+        run: |
+          # KWOK repository
+          KWOK_REPO=kubernetes-sigs/kwok
+          # Get latest
+          KWOK_LATEST_RELEASE=$(curl "https://api.github.com/repos/${KWOK_REPO}/releases/latest" | jq -r '.tag_name')
+          
+          wget -O kwokctl -c "https://github.com/${KWOK_REPO}/releases/download/${KWOK_LATEST_RELEASE}/kwokctl-linux-amd64"
+          chmod +x kwokctl
+          sudo mv kwokctl /usr/local/bin/kwokctl
 
       - name: Create KWOK Cluster
         run: |
           # Create a KWOK cluster for testing with specific Kubernetes version
-          kwokctl create cluster --name=kwok-test
+          kwokctl create cluster --name=kwok-test --wait=1m
           
-          # Set KUBECONFIG environment variable
-          echo "KUBECONFIG=$(kwokctl get kubeconfig --name=kwok-test)" >> $GITHUB_ENV
-          
-          # Verify cluster is running
-          kubectl cluster-info
-          kubectl get nodes
-
       - name: Install K8s CLI tools
         run: |
           # Install Helm
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           
           # Install istioctl (latest version)
-          ISTIO_VERSION=$(curl -sL https://github.com/istio/istio/releases/latest | grep -o "v[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1)
+          ISTIO_VERSION=$(curl -s https://api.github.com/repos/istio/istio/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
           curl -L https://istio.io/downloadIstio | ISTIO_VERSION=${ISTIO_VERSION} sh -
           sudo mv istio-${ISTIO_VERSION}/bin/istioctl /usr/local/bin/
           

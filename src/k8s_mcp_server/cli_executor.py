@@ -10,6 +10,7 @@ import asyncio
 import logging
 import shlex
 import time
+from asyncio.subprocess import PIPE
 
 from k8s_mcp_server.config import (
     DEFAULT_TIMEOUT,
@@ -50,7 +51,8 @@ async def check_cli_installed(cli_tool: str) -> bool:
 
     try:
         cmd = SUPPORTED_CLI_TOOLS[cli_tool]["check_cmd"]
-        process = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        cmd_args = shlex.split(cmd)
+        process = await asyncio.create_subprocess_exec(*cmd_args, stdout=PIPE, stderr=PIPE)
         await process.communicate()
         return process.returncode == 0
     except Exception as e:
@@ -127,11 +129,11 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
     if is_piped:
         commands = split_pipe_command(command)
         first_command = inject_context_namespace(commands[0])
+
+        # We'll execute the commands separately and handle piping ourselves
+        command_list = [first_command]
         if len(commands) > 1:
-            # Reconstruct the pipe command with the modified first command
-            command = first_command + " | " + " | ".join(commands[1:])
-        else:
-            command = first_command
+            command_list.extend(commands[1:])
     else:
         # Handle context and namespace for non-piped commands
         command = inject_context_namespace(command)
@@ -144,12 +146,47 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
     start_time = time.time()
 
     try:
-        # Create subprocess with resource limits
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        if is_piped:
+            # Execute piped commands securely by chaining them
+            processes = []
+
+            # Split commands for secure execution
+            for i, cmd in enumerate(command_list):
+                cmd_args = shlex.split(cmd)
+
+                if i == 0:  # First command
+                    # First process writes to a pipe
+                    first_process = await asyncio.create_subprocess_exec(
+                        *cmd_args,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=PIPE,
+                    )
+                    processes.append(first_process)
+                    prev_stdout = first_process.stdout
+
+                else:  # Middle or last commands
+                    # Read from previous process's stdout, write to pipe (except last command)
+                    next_process = await asyncio.create_subprocess_exec(
+                        *cmd_args,
+                        stdin=prev_stdout,
+                        stdout=PIPE if i < len(command_list) - 1 else PIPE,
+                        stderr=PIPE,
+                    )
+                    processes.append(next_process)
+                    if i < len(command_list) - 1:
+                        prev_stdout = next_process.stdout
+
+            # We only need to communicate with the last process to get the final output
+            last_process = processes[-1]
+            process = last_process
+        else:
+            # Use safer create_subprocess_exec for non-piped commands
+            cmd_args = shlex.split(command)
+            process = await asyncio.create_subprocess_exec(
+                *cmd_args,
+                stdout=PIPE,
+                stderr=PIPE,
+            )
 
         # Wait for the process to complete with timeout
         try:
