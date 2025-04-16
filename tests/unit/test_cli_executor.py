@@ -229,6 +229,16 @@ def test_inject_context_namespace_error_handling():
 
             # Test with empty command
             assert inject_context_namespace("") == ""
+            
+            # Test with non-kubectl/istioctl command
+            assert inject_context_namespace("helm list") == "helm list"
+            
+            # Test without shlex.join (Python < 3.8 compatibility)
+            with patch("k8s_mcp_server.cli_executor.shlex.join", side_effect=ImportError):
+                # Command with spaces that needs quoting
+                result = inject_context_namespace("kubectl get pods -l app=my app")
+                assert "--context=test-context" in result
+                assert "--namespace=test-namespace" in result
 
 
 def test_is_auth_error():
@@ -413,6 +423,30 @@ async def test_execute_command_auth_error():
                 assert "command" in exc_info.value.details
                 assert exc_info.value.details["command"] == "kubectl get pods"
 
+
+@pytest.mark.asyncio
+async def test_execute_command_auth_error_no_tool():
+    """Test authentication error without a recognizable CLI tool."""
+    with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_subprocess:
+        # Mock a process that returns auth error
+        process_mock = AsyncMock()
+        process_mock.returncode = 1
+        process_mock.communicate.return_value = (b"", b"Unauthorized")
+        mock_subprocess.return_value = process_mock
+
+        with patch("k8s_mcp_server.cli_executor.validate_command"):
+            with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="unknown-tool list"):
+                with patch("k8s_mcp_server.cli_executor.get_tool_from_command", return_value=None):
+                    with pytest.raises(AuthenticationError) as exc_info:
+                        await execute_command("unknown-tool list")
+
+                    assert "Authentication error" in str(exc_info.value)
+                    assert "Unauthorized" in str(exc_info.value)
+                    # Should not have any tool-specific message
+                    assert "kubeconfig" not in str(exc_info.value)
+                    assert "Please check your" not in str(exc_info.value)
+                    assert exc_info.value.code == "AUTH_ERROR"
+
     # Test auth errors for different CLI tools
     for cli_tool, error_msg in [
         ("helm", "Please check your Helm repository configuration"),
@@ -499,9 +533,50 @@ async def test_execute_command_with_pipe():
                         # Verify the result
                         assert result["status"] == "success"
                         assert result["output"] == "Command output"
+                        assert "execution_time" in result
+                        assert result["exit_code"] == 0
 
                         # Verify both processes were created
                         assert mock_subprocess.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_execute_command_with_complex_pipe():
+    """Test pipe command execution with multiple pipe stages."""
+    # Mock the validation and subprocess functions
+    pipe_commands = ["kubectl get pods", "grep nginx", "wc -l"]
+    with patch("k8s_mcp_server.cli_executor.validate_command"):
+        with patch("k8s_mcp_server.cli_executor.is_pipe_command", return_value=True):
+            with patch("k8s_mcp_server.cli_executor.split_pipe_command", return_value=pipe_commands):
+                # Setup process mocks for each command in the pipe
+                with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_subprocess:
+                    # Create process mocks
+                    first_process = AsyncMock()
+                    first_process.stdout = AsyncMock()
+                    first_process.returncode = 0
+
+                    middle_process = AsyncMock()
+                    middle_process.stdout = AsyncMock()
+                    middle_process.returncode = 0
+
+                    last_process = AsyncMock()
+                    last_process.returncode = 0
+                    last_process.communicate = AsyncMock(return_value=(b"3", b""))
+
+                    # Configure mock to return different values for each call
+                    mock_subprocess.side_effect = [first_process, middle_process, last_process]
+
+                    # Mock context injection
+                    with patch("k8s_mcp_server.cli_executor.inject_context_namespace", return_value="kubectl get pods --context=test"):
+                        # Test with a pipe command
+                        result = await execute_command("kubectl get pods | grep nginx | wc -l")
+
+                        # Verify the result
+                        assert result["status"] == "success"
+                        assert result["output"] == "3"
+
+                        # Verify all three processes were created
+                        assert mock_subprocess.call_count == 3
 
 
 @pytest.mark.asyncio
@@ -515,9 +590,32 @@ async def test_execute_command_output_truncation():
         mock_subprocess.return_value = process_mock
 
         with patch("k8s_mcp_server.cli_executor.MAX_OUTPUT_SIZE", 100000):
-            result = await execute_command("kubectl get pods")
-            assert "truncated" in result["output"]
-            assert len(result["output"]) <= 100000 + len("\n... (output truncated)")
+            with patch("k8s_mcp_server.cli_executor.logger") as mock_logger:
+                result = await execute_command("kubectl get pods")
+                assert "truncated" in result["output"]
+                assert len(result["output"]) <= 100000 + len("\n... (output truncated)")
+                # Verify logging of output truncation
+                mock_logger.info.assert_called_once()
+                assert "Output truncated" in mock_logger.info.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_execute_command_output_not_truncated():
+    """Test no output truncation when under MAX_OUTPUT_SIZE."""
+    output = "a" * 1000  # Small output
+    with patch("asyncio.create_subprocess_exec") as mock_subprocess:
+        process_mock = AsyncMock()
+        process_mock.returncode = 0
+        process_mock.communicate.return_value = (output.encode(), b"")
+        mock_subprocess.return_value = process_mock
+
+        with patch("k8s_mcp_server.cli_executor.MAX_OUTPUT_SIZE", 10000):
+            with patch("k8s_mcp_server.cli_executor.logger") as mock_logger:
+                result = await execute_command("kubectl get pods")
+                assert "truncated" not in result["output"]
+                assert len(result["output"]) == 1000
+                # Verify no logging of output truncation
+                mock_logger.info.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -593,6 +691,15 @@ async def test_get_command_help():
         assert result.help_text == "Help text"
         mock_execute.assert_called_once_with("kubectl get --help")
 
+    # Test with general help (no specific command)
+    with patch("k8s_mcp_server.cli_executor.execute_command", new_callable=AsyncMock) as mock_execute:
+        mock_execute.return_value = {"status": "success", "output": "General help text"}
+
+        result = await get_command_help("kubectl")
+
+        assert result.help_text == "General help text"
+        mock_execute.assert_called_once_with("kubectl --help")
+
     # Test with validation error
     with patch("k8s_mcp_server.cli_executor.execute_command", side_effect=CommandValidationError("Invalid command")):
         result = await get_command_help("kubectl", "get")
@@ -641,3 +748,13 @@ async def test_get_command_help():
     result = await get_command_help("unsupported_tool", "get")
     assert "Unsupported CLI tool" in result.help_text
     assert result.status == "error"
+
+    # Test different CLI tools
+    for cli_tool in ["helm", "istioctl", "argocd"]:
+        with patch("k8s_mcp_server.cli_executor.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.return_value = {"status": "success", "output": f"{cli_tool} help text"}
+            
+            result = await get_command_help(cli_tool, "list")
+            
+            assert result.help_text == f"{cli_tool} help text"
+            mock_execute.assert_called_once_with(f"{cli_tool} list --help")

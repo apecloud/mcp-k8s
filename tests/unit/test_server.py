@@ -637,3 +637,178 @@ async def test_execute_argocd_not_installed():
 
         assert result["status"] == "error"
         assert "not installed" in result["output"]
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_command_with_none_timeout():
+    """Test _execute_tool_command with None timeout."""
+    from k8s_mcp_server.server import _execute_tool_command
+    
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.return_value = {"status": "success", "output": "Command output"}
+            
+            # Test with None timeout
+            result = await _execute_tool_command("kubectl", "get pods", None, None)
+            
+            assert result["status"] == "success"
+            assert result["output"] == "Command output"
+            mock_execute.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_command_info_logs():
+    """Test _execute_tool_command context logging."""
+    from k8s_mcp_server.server import _execute_tool_command
+    
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.return_value = {"status": "success", "output": "Command output"}
+            
+            # Create mock context
+            mock_ctx = AsyncMock()
+            
+            # Test with piped command
+            await _execute_tool_command("kubectl", "get pods | grep nginx", 30, mock_ctx)
+            
+            # Verify context info was called for the pipe command
+            assert mock_ctx.info.call_count >= 2
+            assert any("piped" in str(call) for call in mock_ctx.info.call_args_list)
+            
+            # Test with successful command
+            mock_ctx.reset_mock()
+            await _execute_tool_command("kubectl", "get pods", 30, mock_ctx)
+            
+            # Verify context info was called for success
+            assert any("executed successfully" in str(call) for call in mock_ctx.info.call_args_list)
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_command_warning_logs():
+    """Test _execute_tool_command context warning logging."""
+    from k8s_mcp_server.server import _execute_tool_command
+    
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
+        with patch("k8s_mcp_server.server.execute_command", new_callable=AsyncMock) as mock_execute:
+            mock_execute.return_value = {"status": "error", "output": "Command failed"}
+            
+            # Create mock context
+            mock_ctx = AsyncMock()
+            
+            # Test with failed command
+            await _execute_tool_command("kubectl", "get pods", 30, mock_ctx)
+            
+            # Verify context warning was called
+            mock_ctx.warning.assert_called_once()
+            assert "failed" in str(mock_ctx.warning.call_args[0][0])
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_command_unexpected_error():
+    """Test _execute_tool_command with unexpected error."""
+    from k8s_mcp_server.server import _execute_tool_command
+    
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
+        with patch("k8s_mcp_server.server.execute_command", side_effect=Exception("Unexpected error")):
+            
+            # Create mock context
+            mock_ctx = AsyncMock()
+            
+            # Test with unexpected error
+            result = await _execute_tool_command("kubectl", "get pods", 30, mock_ctx)
+            
+            # Verify error handling
+            assert result["status"] == "error"
+            assert "Unexpected error" in result["error"]["message"]
+            mock_ctx.error.assert_called_once()
+            assert "Unexpected error" in str(mock_ctx.error.call_args[0][0])
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_command_validation_error():
+    """Test _execute_tool_command with validation error."""
+    from k8s_mcp_server.server import _execute_tool_command
+    
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
+        with patch("k8s_mcp_server.server.execute_command", side_effect=CommandValidationError("Validation error", {"command": "kubectl invalid"})):
+            
+            # Create mock context
+            mock_ctx = AsyncMock()
+            
+            # Test with validation error
+            result = await _execute_tool_command("kubectl", "invalid", 30, mock_ctx)
+            
+            # Verify error handling
+            assert result["status"] == "error"
+            assert "Validation error" in result["error"]["message"]
+            mock_ctx.error.assert_called_once()
+            assert "Command validation error" in str(mock_ctx.error.call_args[0][0])
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_command_authentication_error():
+    """Test _execute_tool_command with authentication error."""
+    from k8s_mcp_server.server import _execute_tool_command
+    
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
+        with patch("k8s_mcp_server.server.execute_command", side_effect=AuthenticationError("Auth error", {"command": "kubectl get pods"})):
+            
+            # Create mock context
+            mock_ctx = AsyncMock()
+            
+            # Test with authentication error
+            result = await _execute_tool_command("kubectl", "get pods", 30, mock_ctx)
+            
+            # Verify error handling
+            assert result["status"] == "error"
+            assert "Auth error" in result["error"]["message"]
+            mock_ctx.error.assert_called_once()
+            assert "Authentication error" in str(mock_ctx.error.call_args[0][0])
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_command_timeout_error():
+    """Test _execute_tool_command with timeout error."""
+    from k8s_mcp_server.server import _execute_tool_command
+    
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
+        with patch("k8s_mcp_server.server.execute_command", side_effect=CommandTimeoutError("Timeout error", {"command": "kubectl get pods", "timeout": 30})):
+            
+            # Create mock context
+            mock_ctx = AsyncMock()
+            
+            # Test with timeout error
+            result = await _execute_tool_command("kubectl", "get pods", 30, mock_ctx)
+            
+            # Verify error handling
+            assert result["status"] == "error"
+            assert "Timeout error" in result["error"]["message"]
+            mock_ctx.error.assert_called_once()
+            assert "Command timed out" in str(mock_ctx.error.call_args[0][0])
+
+
+@pytest.mark.asyncio
+async def test_describe_tool_unexpected_error():
+    """Test describe_kubectl with an unexpected error."""
+    # Mock CLI status
+    with patch("k8s_mcp_server.server.cli_status", {"kubectl": True}):
+        # Mock command help to raise an unexpected error
+        with patch("k8s_mcp_server.server.get_command_help", side_effect=Exception("Unexpected help error")):
+            # Mock context
+            mock_ctx = AsyncMock()
+            # Test with unexpected error
+            result = await describe_kubectl(command="get", ctx=mock_ctx)
+            
+            # Verify error handling
+            assert result.status == "error"
+            assert "Error retrieving kubectl help" in result.help_text
+            assert result.error["code"] == "INTERNAL_ERROR"
+            mock_ctx.error.assert_called_once()
+            assert "Unexpected error" in str(mock_ctx.error.call_args[0][0])
