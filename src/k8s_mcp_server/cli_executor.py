@@ -10,6 +10,7 @@ import asyncio
 import logging
 import shlex
 import time
+from asyncio.subprocess import PIPE
 
 from k8s_mcp_server.config import (
     DEFAULT_TIMEOUT,
@@ -50,7 +51,8 @@ async def check_cli_installed(cli_tool: str) -> bool:
 
     try:
         cmd = SUPPORTED_CLI_TOOLS[cli_tool]["check_cmd"]
-        process = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        cmd_args = shlex.split(cmd)
+        process = await asyncio.create_subprocess_exec(*cmd_args, stdout=PIPE, stderr=PIPE)
         await process.communicate()
         return process.returncode == 0
     except Exception as e:
@@ -145,11 +147,21 @@ async def execute_command(command: str, timeout: int | None = None) -> CommandRe
 
     try:
         # Create subprocess with resource limits
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        # Handle pipe commands with shell due to their complexity
+        if is_piped:
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=PIPE,
+                stderr=PIPE,
+            )
+        else:
+            # Use safer create_subprocess_exec for non-piped commands
+            cmd_args = shlex.split(command)
+            process = await asyncio.create_subprocess_exec(
+                *cmd_args,
+                stdout=PIPE,
+                stderr=PIPE,
+            )
 
         # Wait for the process to complete with timeout
         try:
