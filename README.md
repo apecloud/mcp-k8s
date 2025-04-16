@@ -3,9 +3,10 @@
 [![CI Status](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/ci.yml)
 [![Release Status](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/release.yml/badge.svg)](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/release.yml)
 [![codecov](https://codecov.io/gh/alexei-led/k8s-mcp-server/graph/badge.svg?token=eCaXPJ0olS)](https://codecov.io/gh/alexei-led/k8s-mcp-server)
+[![Image Tags](https://ghcr-badge.egpl.dev/alexei-led/k8s-mcp-server/tags?color=%2344cc11&ignore=latest&n=4&label=image+tags&trim=)](https://github.com/alexei-led/k8s-mcp-server/pkgs/container/k8s-mcp-server/versions)
+[![Image Size](https://ghcr-badge.egpl.dev/alexei-led/k8s-mcp-server/size?color=%2344cc11&tag=latest&label=image+size&trim=)](https://github.com/alexei-led/k8s-mcp-server/pkgs/container/k8s-mcp-server)
 [![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Docker Pulls](https://img.shields.io/docker/pulls/alexei-led/k8s-mcp-server.svg)](https://github.com/alexei-led/k8s-mcp-server/pkgs/container/k8s-mcp-server)
 
 K8s MCP Server is a server for [Anthropic's MCP (Model Context Protocol)](https://www.anthropic.com/news/introducing-mcp) that allows running Kubernetes CLI tools such as `kubectl`, `istioctl`, `helm`, and `argocd` in a safe, containerized environment.
 
