@@ -114,7 +114,7 @@ sequenceDiagram
 To use K8s MCP Server with Claude Desktop, you need:
 
 - Docker installed on your system
-- Valid Kubernetes configuration in `~/.kube/config`
+- Valid Kubernetes configuration in `/Users/YOUR_USER_NAME/.kube/config`
 - Claude Desktop application
 
 ## Configuration
@@ -143,7 +143,7 @@ For example, to use specific context and namespace, modify your Claude Desktop c
         "-i",
         "--rm",
         "-v",
-        "~/.kube:/home/appuser/.kube:ro",
+        "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
         "-e",
         "K8S_CONTEXT=my-cluster",
         "-e",
@@ -169,7 +169,7 @@ To use a custom security configuration file, mount it into the container and set
         "-i",
         "--rm",
         "-v",
-        "~/.kube:/home/appuser/.kube:ro",
+        "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
         "-v",
         "/path/to/my-security-config.yaml:/app/security_config.yaml:ro",
         "-e",
@@ -195,7 +195,7 @@ To run in permissive mode (allow all commands, including potentially dangerous o
         "-i",
         "--rm",
         "-v",
-        "~/.kube:/home/appuser/.kube:ro",
+        "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
         "-e",
         "K8S_MCP_SECURITY_MODE=permissive",
         "ghcr.io/alexei-led/k8s-mcp-server:latest"
@@ -210,7 +210,7 @@ To run in permissive mode (allow all commands, including potentially dangerous o
 To integrate K8s MCP Server with Claude Desktop, follow these steps:
 
 1. **Locate the Claude Desktop configuration file**:
-   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - macOS: `/Users/YOUR_USER_NAME/Library/Application Support/Claude/claude_desktop_config.json`
    - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
 2. **Edit the configuration file** to include the K8s MCP Server:
@@ -224,7 +224,7 @@ To integrate K8s MCP Server with Claude Desktop, follow these steps:
            "-i",
            "--rm",
            "-v",
-           "~/.kube:/home/appuser/.kube:ro",
+           "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
            "ghcr.io/alexei-led/k8s-mcp-server:latest"
          ]
        }
@@ -232,7 +232,7 @@ To integrate K8s MCP Server with Claude Desktop, follow these steps:
    }
    ```
 
-   > **Note**: Make sure to replace `~/.kube` with the absolute path to your Kubernetes configuration directory, and update the image name if using a custom image.
+   > **Note**: Make sure to replace `/Users/YOUR_USER_NAME/.kube` with the absolute path to your Kubernetes configuration directory, and update the image name if using a custom image.
 
 3. **Restart Claude Desktop** to apply the changes
    - After restarting, you should see a hammer 🔨 icon in the bottom right corner of the input box
@@ -513,11 +513,11 @@ For local development, we recommend setting up a lightweight Kubernetes cluster:
 curl -sfL https://get.k3s.io | sh -
 
 # Get kubeconfig (sudo is required to read the config)
-sudo cat /etc/rancher/k3s/k3s.yaml > ~/.kube/k3s-config
+sudo cat /etc/rancher/k3s/k3s.yaml > /Users/YOUR_USER_NAME/.kube/k3s-config
 # Fix permissions
-chmod 600 ~/.kube/k3s-config
+chmod 600 /Users/YOUR_USER_NAME/.kube/k3s-config
 # Set KUBECONFIG to use this file
-export KUBECONFIG=~/.kube/k3s-config
+export KUBECONFIG=/Users/YOUR_USER_NAME/.kube/k3s-config
 
 # Verify it's running
 kubectl get nodes
@@ -536,9 +536,9 @@ sudo k0s install controller --single
 sudo k0s start
 
 # Get kubeconfig
-sudo k0s kubeconfig admin > ~/.kube/k0s-config
-chmod 600 ~/.kube/k0s-config
-export KUBECONFIG=~/.kube/k0s-config
+sudo k0s kubeconfig admin > /Users/YOUR_USER_NAME/.kube/k0s-config
+chmod 600 /Users/YOUR_USER_NAME/.kube/k0s-config
+export KUBECONFIG=/Users/YOUR_USER_NAME/.kube/k0s-config
 
 # Verify it's running
 kubectl get nodes
@@ -653,7 +653,7 @@ Since our integration tests primarily validate command formation, execution, and
 The server includes several safety features:
 
 - **Isolation**: When running in Docker, the server operates in an isolated container environment
-- **Read-only access**: Mount Kubernetes configuration as read-only (`-v ~/.kube:/home/appuser/.kube:ro`)
+- **Read-only access**: Mount Kubernetes configuration as read-only (`-v /Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro`)
 - **Non-root execution**: All processes run as a non-root user inside the container
 - **Command validation**: Potentially dangerous commands require explicit resource names
 - **Context separation**: Automatic context and namespace injection for commands
@@ -679,7 +679,7 @@ To run in permissive mode (allow all commands):
         "-i",
         "--rm",
         "-v",
-        "~/.kube:/home/appuser/.kube:ro",
+        "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
         "-e",
         "K8S_MCP_SECURITY_MODE=permissive",
         "ghcr.io/alexei-led/k8s-mcp-server:latest"
@@ -733,7 +733,7 @@ Security rules can be customized using a YAML configuration file. This allows fo
            "-i",
            "--rm",
            "-v",
-           "~/.kube:/home/appuser/.kube:ro",
+           "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
            "-v",
            "/path/to/security_config.yaml:/security_config.yaml:ro",
            "-e",
@@ -967,7 +967,7 @@ mcp run src/k8s_mcp_server/server.py
           "--rm",
           "--network=host",
           "-v",
-          "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube",
+          "//Users/YOUR_USER_NAME/.kube:/home/appuser/.kube",
           "ghcr.io/alexei-led/k8s-mcp-server:latest"
         ]
       }
