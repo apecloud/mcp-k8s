@@ -52,8 +52,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Step 2: Install kubectl based on architecture
-# Use specific kubectl version (e.g., v1.29.2)
-ENV KUBECTL_VERSION=v1.29.2
+# Use specific kubectl version (e.g., v1.33.0)
+ENV KUBECTL_VERSION=v1.33.0
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
         curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/arm64/kubectl"; \
     else \
@@ -64,7 +64,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
 
 # Step 3: Install Helm
 # Use specific Helm version
-ENV HELM_VERSION=v3.14.0
+ENV HELM_VERSION=v3.17.3
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
         curl -LO "https://get.helm.sh/helm-${HELM_VERSION}-linux-arm64.tar.gz" && \
         tar -zxvf helm-${HELM_VERSION}-linux-arm64.tar.gz && \
@@ -79,7 +79,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
 
 # Step 4: Install istioctl
 # Use specific Istio version
-ENV ISTIO_VERSION=1.21.0
+ENV ISTIO_VERSION=1.25.2
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
         ISTIO_ARCH="arm64"; \
     else \
@@ -91,7 +91,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
 
 # Step 5: Install ArgoCD CLI
 # Use specific ArgoCD version
-ENV ARGOCD_VERSION=v2.9.6
+ENV ARGOCD_VERSION=v2.14.11
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
         curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-arm64; \
     else \
