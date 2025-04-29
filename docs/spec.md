@@ -575,7 +575,7 @@ Resource templates provide a parameterized approach to resource URIs, enabling c
 
 ##### 8.3.1 Defining Resource Templates
 
-The server exposes available templates via the `resources/templates/list` MCP method, detailing each template’s structure and parameters.
+The server exposes available templates via the `resources/templates/list` MCP method, detailing each template's structure and parameters.
 
 **Example Request:**
 ```json
@@ -666,7 +666,7 @@ Clients can subscribe to specific resources for real-time updates, ideal for mon
   }
   ```
 
-Upon receiving an update, clients can use `resources/read` to retrieve the latest resource data. For instance, a deployment’s `status` changing from "Running" to "Failed" triggers a notification, prompting a refresh.
+Upon receiving an update, clients can use `resources/read` to retrieve the latest resource data. For instance, a deployment's `status` changing from "Running" to "Failed" triggers a notification, prompting a refresh.
 
 ---
 
