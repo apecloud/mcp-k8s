@@ -54,7 +54,7 @@ docker-compose-down:
 # Multi-architecture build (requires Docker Buildx)
 docker-buildx:
 	docker buildx create --name mybuilder --use
-	docker buildx build --platform linux/amd64,linux/arm64 -t yourusername/k8s-mcp-server:latest -f deploy/docker/Dockerfile .
+	docker buildx build --platform linux/amd64,linux/arm64 -t k8s-mcp-server -f deploy/docker/Dockerfile .
 
 # Help
 help:

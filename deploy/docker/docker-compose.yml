@@ -13,6 +13,12 @@ services:
       - ~/.kube:/home/appuser/.kube:ro # Mount Kubernetes configs as read-only
       # Uncomment to use custom security config
       # - ./security_config.yaml:/security_config.yaml:ro
+      # Uncomment for AWS EKS authentication
+      # - ~/.aws:/home/appuser/.aws:ro # Mount AWS credentials as read-only
+      # Uncomment for GCP GKE authentication
+      # - ~/.config/gcloud:/home/appuser/.config/gcloud:ro # Mount GCP credentials as read-only
+      # Uncomment for Azure AKS authentication
+      # - ~/.azure:/home/appuser/.azure:ro # Mount Azure credentials as read-only
     environment:
       # Kubernetes settings
       - K8S_CONTEXT=  # Leave empty to use current context or specify a context
@@ -26,6 +32,20 @@ services:
       - K8S_MCP_TIMEOUT=300 # Default timeout in seconds
       # - K8S_MCP_MAX_OUTPUT=100000 # Uncomment to set max output size
       - K8S_MCP_TRANSPORT=stdio # Transport protocol (stdio or sse)
+      
+      # AWS EKS settings (uncomment to use)
+      # - AWS_PROFILE=default # AWS profile to use
+      # - AWS_REGION=us-west-2 # AWS region for EKS cluster
+      
+      # GCP GKE settings (uncomment to use)
+      # - CLOUDSDK_CORE_PROJECT=my-project # GCP project ID
+      # - CLOUDSDK_COMPUTE_REGION=us-central1 # GCP region
+      # - CLOUDSDK_COMPUTE_ZONE=us-central1-a # GCP zone
+      # - USE_GKE_GCLOUD_AUTH_PLUGIN=True # Enable GKE auth plugin
+      
+      # Azure AKS settings (uncomment to use)
+      # - AZURE_SUBSCRIPTION=my-subscription # Azure subscription
+      # - AZURE_DEFAULTS_LOCATION=eastus # Azure region
     restart: unless-stopped
 # To build multi-architecture images:
 # 1. Set up Docker buildx: docker buildx create --name mybuilder --use
