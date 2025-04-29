@@ -53,7 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Step 2: Install kubectl based on architecture
 # Use specific kubectl version (e.g., v1.33.0)
-ENV KUBECTL_VERSION=v1.33.0
+ARG KUBECTL_VERSION=v1.33.0
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
         curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/arm64/kubectl"; \
     else \
@@ -64,7 +64,8 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
 
 # Step 3: Install Helm
 # Use specific Helm version
-ENV HELM_VERSION=v3.17.3
+
+ARG HELM_VERSION=v3.17.3
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
         curl -LO "https://get.helm.sh/helm-${HELM_VERSION}-linux-arm64.tar.gz" && \
         tar -zxvf helm-${HELM_VERSION}-linux-arm64.tar.gz && \
@@ -79,7 +80,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
 
 # Step 4: Install istioctl
 # Use specific Istio version
-ENV ISTIO_VERSION=1.25.2
+ARG ISTIO_VERSION=1.25.2
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
         ISTIO_ARCH="arm64"; \
     else \
@@ -91,7 +92,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
 
 # Step 5: Install ArgoCD CLI
 # Use specific ArgoCD version
-ENV ARGOCD_VERSION=v2.14.11
+ARG ARGOCD_VERSION=v2.14.11
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
         curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-arm64; \
     else \
@@ -101,12 +102,12 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
     && mv argocd /usr/local/bin/
 
 # Step 6: Install AWS CLI for EKS authentication
-ENV AWS_CLI_VERSION=1.32.0
+ARG AWS_CLI_VERSION=1.32.0
 RUN pip install --no-cache-dir awscli==${AWS_CLI_VERSION} && \
     aws --version
 
 # Step 7: Install minimal Google Cloud SDK for GKE authentication
-ENV GCLOUD_VERSION=519.0.0
+ARG GCLOUD_VERSION=519.0.0
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
         curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-arm.tar.gz && \
         tar -xzf google-cloud-cli-linux-arm.tar.gz -C /opt && \
@@ -125,7 +126,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
     gcloud --version
 
 # Step 8: Install Azure CLI for AKS authentication
-ENV AZURE_CLI_VERSION=2.71.0
+ARG AZURE_CLI_VERSION=2.71.0
 RUN pip install --no-cache-dir azure-cli==${AZURE_CLI_VERSION} && \
     az --version
 
