@@ -100,11 +100,47 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
     && chmod +x argocd \
     && mv argocd /usr/local/bin/
 
+# Step 6: Install AWS CLI for EKS authentication
+ENV AWS_CLI_VERSION=1.32.0
+RUN pip install --no-cache-dir awscli==${AWS_CLI_VERSION} && \
+    aws --version
+
+# Step 7: Install minimal Google Cloud SDK for GKE authentication
+ENV GCLOUD_VERSION=519.0.0
+RUN if [ "${TARGETARCH}" = "arm64" ]; then \
+        curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-arm.tar.gz && \
+        tar -xzf google-cloud-cli-linux-arm.tar.gz -C /opt && \
+        rm google-cloud-cli-linux-arm.tar.gz; \
+    else \
+        curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz && \
+        tar -xzf google-cloud-cli-linux-x86_64.tar.gz -C /opt && \
+        rm google-cloud-cli-linux-x86_64.tar.gz; \
+    fi && \
+    /opt/google-cloud-sdk/install.sh --quiet --usage-reporting=false --path-update=false \
+        --additional-components gke-gcloud-auth-plugin && \
+    ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
+    ln -s /opt/google-cloud-sdk/bin/gke-gcloud-auth-plugin /usr/local/bin/gke-gcloud-auth-plugin && \
+    # Set up GKE authentication plugin
+    echo "export USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> /etc/profile.d/gke_auth.sh && \
+    gcloud --version
+
+# Step 8: Install Azure CLI for AKS authentication
+ENV AZURE_CLI_VERSION=2.71.0
+RUN pip install --no-cache-dir azure-cli==${AZURE_CLI_VERSION} && \
+    az --version
+
 # Set up application directory, user, and permissions
-RUN mkdir -p /app/logs && chmod 777 /app/logs \
-    && useradd -m -s /bin/bash -u 10001 appuser \
+RUN mkdir -p /app/logs && chmod 750 /app/logs \
+    && groupadd -g 10001 appgroup \
+    && useradd -m -s /bin/bash -u 10001 -g appgroup appuser \
     && mkdir -p /home/appuser/.kube \
-    && chmod 700 /home/appuser/.kube
+    && mkdir -p /home/appuser/.aws \
+    && mkdir -p /home/appuser/.config/gcloud \
+    && mkdir -p /home/appuser/.azure \
+    && chmod 700 /home/appuser/.kube \
+    && chmod 700 /home/appuser/.aws \
+    && chmod 700 /home/appuser/.config/gcloud \
+    && chmod 700 /home/appuser/.azure
 
 WORKDIR /app
 
@@ -119,7 +155,9 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheels k8s-mcp-server &&
     rm -rf /wheels
 
 # Set ownership after all files have been copied
-RUN chown -R appuser:appuser /app /home/appuser/.kube
+RUN chown -R appuser:appgroup /app \
+    && chown -R appuser:appgroup /home/appuser \
+    && chmod -R o-rwx /app /home/appuser
 
 # Switch to non-root user
 USER appuser
@@ -130,16 +168,25 @@ ENV HOME="/home/appuser" \
     PYTHONUNBUFFERED=1 \
     K8S_MCP_TRANSPORT=stdio \
     K8S_MCP_SECURITY_MODE=strict \
-    K8S_MCP_SECURITY_CONFIG=/app/security_config.yaml
+    K8S_MCP_SECURITY_CONFIG=/app/security_config.yaml \
+    USE_GKE_GCLOUD_AUTH_PLUGIN=True
 
-# Add metadata
+# Add metadata following OCI Image Specification
 LABEL maintainer="Alexei Ledenev" \
       description="Kubernetes Multi-Command Proxy Server" \
+      org.opencontainers.image.title="K8s MCP Server" \
+      org.opencontainers.image.description="Kubernetes Multi-Command Proxy Server for Anthropic's MCP" \
+      org.opencontainers.image.authors="Alexei Ledenev" \
+      org.opencontainers.image.vendor="Alexei Ledenev" \
+      org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.source="https://github.com/alexei-led/k8s-mcp-server" \
-      org.opencontainers.image.version="1.1.0"
+      org.opencontainers.image.documentation="https://github.com/alexei-led/k8s-mcp-server/README.md" \
+      org.opencontainers.image.version="1.3.0" \
+      org.opencontainers.image.created="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 # Expose the service port (only needed if using SSE transport)
 EXPOSE 8080
 
-# Set command to run the server
+# Set command to run the server with proper signal handling
+# The ENTRYPOINT format ensures proper signal forwarding to the Python process
 ENTRYPOINT ["python", "-m", "k8s_mcp_server"]
