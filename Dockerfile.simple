@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制项目文件
+COPY pyproject.toml README.md LICENSE ./
+COPY src/ ./src/
+COPY start.sh ./start.sh
+
+# 安装Python依赖
+RUN pip install --no-cache-dir -e .
+
+# 给启动脚本执行权限
+RUN chmod +x start.sh
+
+# 暴露端口
+EXPOSE 9096
+
+# 启动命令
+CMD ["./start.sh"] 

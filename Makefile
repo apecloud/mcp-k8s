@@ -43,18 +43,38 @@ docker-build:
 	docker build -t k8s-mcp-server -f deploy/docker/Dockerfile .
 
 docker-run:
-	docker run -p 8080:8080 -v ~/.kube:/home/appuser/.kube:ro k8s-mcp-server
+	docker run -p 9096:9096 -v ~/.kube:/home/appuser/.kube:ro k8s-mcp-server
 
 docker-compose:
-	docker-compose -f deploy/docker/docker-compose.yml up -d
+	docker-compose up -d
+
+docker-compose-build:
+	docker-compose up --build -d
+
+docker-compose-logs:
+	docker-compose logs -f k8s-mcp-server
 
 docker-compose-down:
-	docker-compose -f deploy/docker/docker-compose.yml down
+	docker-compose down
 
 # Multi-architecture build (requires Docker Buildx)
 docker-buildx:
 	docker buildx create --name mybuilder --use
 	docker buildx build --platform linux/amd64,linux/arm64 -t k8s-mcp-server -f deploy/docker/Dockerfile .
+
+# Quick build and run (simple version)
+docker-quick:
+	docker build -t k8s-mcp-server-simple -f Dockerfile.simple .
+
+docker-quick-run:
+	docker run --rm -p 9096:9096 k8s-mcp-server-simple
+
+# One-click build and run script
+quick-start:
+	./build_and_run.sh
+
+quick-start-proxy:
+	SET_PROXY=1 ./build_and_run.sh
 
 # Help
 help:
@@ -73,5 +93,11 @@ help:
 	@echo "  docker-build    - Build Docker image"
 	@echo "  docker-run      - Run server in Docker with kubeconfig mounted"
 	@echo "  docker-compose  - Run server using Docker Compose"
+	@echo "  docker-compose-build - Build and run server using Docker Compose"
+	@echo "  docker-compose-logs - View Docker Compose logs"
 	@echo "  docker-compose-down - Stop Docker Compose services"
 	@echo "  docker-buildx   - Build multi-architecture Docker image"
+	@echo "  docker-quick    - Quick build using simplified Dockerfile"
+	@echo "  docker-quick-run - Run quick build image temporarily"
+	@echo "  quick-start     - One-click build and run with persistence"
+	@echo "  quick-start-proxy - One-click build and run with proxy"

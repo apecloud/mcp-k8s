@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  k8s-mcp-server:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    image: k8s-mcp-server:latest
+    container_name: k8s-mcp-server
+    ports:
+      - "9096:9096"
+    volumes:
+      # 挂载本地的kubeconfig文件
+      - ~/.kube:/home/appuser/.kube:ro
+      # 可选：挂载AWS配置
+      - ~/.aws:/home/appuser/.aws:ro
+      # 可选：挂载Google Cloud配置
+      - ~/.config/gcloud:/home/appuser/.config/gcloud:ro
+      # 可选：挂载Azure配置
+      - ~/.azure:/home/appuser/.azure:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - K8S_MCP_TRANSPORT=stdio
+      - K8S_MCP_SECURITY_MODE=strict
+      - K8S_MCP_SECURITY_CONFIG=/app/security_config.yaml
+      - USE_GKE_GCLOUD_AUTH_PLUGIN=True
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9096/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s 

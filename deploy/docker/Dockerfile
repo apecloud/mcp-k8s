@@ -1,8 +1,8 @@
 # Multi-stage build with platform-specific configuration
-ARG PYTHON_VERSION=3.13-slim
+ARG PYTHON_VERSION=3.11-slim
 
 # =========== BUILDER STAGE ===========
-FROM --platform=${TARGETPLATFORM} docker.io/library/python:${PYTHON_VERSION} AS builder
+FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION} AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir wheel && \
     pip wheel --no-cache-dir --wheel-dir=/wheels -e .
 
 # =========== FINAL STAGE ===========
-FROM --platform=${TARGETPLATFORM} docker.io/library/python:${PYTHON_VERSION}
+FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION}
 
 # Set target architecture argument
 ARG TARGETPLATFORM
@@ -149,16 +149,18 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
 COPY deploy/docker/security_config.yaml ./security_config.yaml
+COPY start.sh ./start.sh
 
 # Copy wheels from builder and install
 COPY --from=builder /wheels /wheels
 RUN pip install --no-cache-dir --no-index --find-links=/wheels k8s-mcp-server && \
     rm -rf /wheels
 
-# Set ownership after all files have been copied
+# Set ownership after all files have been copied and make start script executable
 RUN chown -R appuser:appgroup /app \
     && chown -R appuser:appgroup /home/appuser \
-    && chmod -R o-rwx /app /home/appuser
+    && chmod -R o-rwx /app /home/appuser \
+    && chmod +x /app/start.sh
 
 # Switch to non-root user
 USER appuser
@@ -188,5 +190,6 @@ LABEL maintainer="Alexei Ledenev" \
 # Expose the port the app runs on
 EXPOSE 9096
 
-# Command to run the application
-CMD ["uvicorn", "k8s_mcp_server.app:app", "--host", "0.0.0.0", "--port", "9096"]
+# Command to run the application using the startup script
+# 使用启动脚本确保应用正确启动
+CMD ["/app/start.sh"]
