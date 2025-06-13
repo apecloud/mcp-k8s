@@ -1,239 +1,124 @@
-# K8s MCP Server
+# K8s MCP 服务器
 
-[![CI Status](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/ci.yml)
-[![Release Status](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/release.yml/badge.svg)](https://github.com/alexei-led/k8s-mcp-server/actions/workflows/release.yml)
-[![codecov](https://codecov.io/gh/alexei-led/k8s-mcp-server/graph/badge.svg?token=eCaXPJ0olS)](https://codecov.io/gh/alexei-led/k8s-mcp-server)
-[![Image Tags](https://ghcr-badge.egpl.dev/alexei-led/k8s-mcp-server/tags?color=%2344cc11&ignore=latest&n=4&label=image+tags&trim=)](https://github.com/alexei-led/k8s-mcp-server/pkgs/container/k8s-mcp-server/versions)
-[![Image Size](https://ghcr-badge.egpl.dev/alexei-led/k8s-mcp-server/size?color=%2344cc11&tag=latest&label=image+size&trim=)](https://github.com/alexei-led/k8s-mcp-server/pkgs/container/k8s-mcp-server)
-[![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI 状态](https://github.com/tadata-org/k8s-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/tadata-org/k8s-mcp-server/actions/workflows/ci.yml)
+[![发布状态](https://github.com/tadata-org/k8s-mcp-server/actions/workflows/release.yml/badge.svg)](https://github.com/tadata-org/k8s-mcp-server/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/tadata-org/k8s-mcp-server/graph/badge.svg)](https://codecov.io/gh/tadata-org/k8s-mcp-server)
+[![镜像标签](https://ghcr-badge.egpl.dev/tadata-org/k8s-mcp-server/tags?color=%2344cc11&ignore=latest&n=4&label=image+tags&trim=)](https://github.com/tadata-org/k8s-mcp-server/pkgs/container/k8s-mcp-server/versions)
+[![镜像大小](https://ghcr-badge.egpl.dev/tadata-org/k8s-mcp-server/size?color=%2344cc11&tag=latest&label=image+size&trim=)](https://github.com/tadata-org/k8s-mcp-server/pkgs/container/k8s-mcp-server)
+[![Python 版本](https://img.shields.io/pypi/pyversions/k8s-mcp-server.svg)](https://pypi.org/project/k8s-mcp-server/)
+[![许可证: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-K8s MCP Server is a Docker-based server implementing [Anthropic's Model Context Protocol (MCP)](https://www.anthropic.com/news/introducing-mcp) that enables Claude to run Kubernetes CLI tools (`kubectl`, `istioctl`, `helm`, `argocd`) in a secure, containerized environment.
+K8s MCP 服务器是一个基于 `fastapi-mcp` 构建的、可通过网络访问的服务。它使 Claude 等大型语言模型 (LLM) 能够安全地运行 Kubernetes CLI 工具（`kubectl`, `istioctl`, `helm`, `argocd`）。它通过标准的模型控制协议（MCP）提供服务，并支持在每次请求中动态传入 `kubeconfig`，从而实现对多个 Kubernetes 集群的无缝管理。
 
-## Demo: Deploy and Troubleshoot WordPress
+## 核心特性
 
-**Session 1:** Using k8s-mcp-server and Helm CLI to deploy a WordPress application in the claude-demo namespace, then intentionally breaking it by scaling the MariaDB StatefulSet to zero.
+- **标准 MCP 实现**: 使用 `fastapi-mcp` 将 FastAPI 端点自动暴露为 MCP 工具，无需手动实现协议。
+- **动态多集群支持**: 在每次 API 请求中直接以 Base64 编码的形式传入 `kubeconfig` 内容，无需预先配置或挂载文件。
+- **独立的工具端点**: 每个 CLI 工具（`kubectl`, `helm` 等）都有自己专用的 HTTP 端点，结构清晰。
+- **独立服务**: 可作为独立的 Docker 容器或在 Kubernetes 中运行。
+- **自动 OpenAPI 文档**: 继承 FastAPI 的优势，自动生成并提供交互式 API 文档（通过 `/docs`）。
 
-**Session 2:** Troubleshooting session where we use k8s-mcp-server to diagnose the broken WordPress site through kubectl commands, identify the missing database issue, and fix it by scaling up the StatefulSet and configuring ingress access..
-
-[Demo](https://private-user-images.githubusercontent.com/1898375/428398164-5ddce5bc-ec92-459b-a506-5d4442618a81.mp4?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDMzNDE0OTEsIm5iZiI6MTc0MzM0MTE5MSwicGF0aCI6Ii8xODk4Mzc1LzQyODM5ODE2NC01ZGRjZTViYy1lYzkyLTQ1OWItYTUwNi01ZDQ0NDI2MThhODEubXA0P1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI1MDMzMCUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNTAzMzBUMTMyNjMxWiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9YmUyNDExMGUzOGRlN2QxNWViMzhhOTE4Y2U1ZmRjMTQxYTI0OGNlNTFjNTRlMjFjNmQ3NTNhNGFmODNkODIzMSZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QifQ.hwKERwuQRXxHEYJ9d_fQ__XL1gj8l76nO6Yy6M4Uov8)
-
-## How It Works
-
-```mermaid
-flowchart LR
-    A[User] --> |Asks K8s question| B[Claude]
-    B --> |Sends command via MCP| C[K8s MCP Server]
-    C --> |Executes kubectl, helm, etc.| D[Kubernetes Cluster]
-    D --> |Returns results| C
-    C --> |Returns formatted results| B
-    B --> |Analyzes & explains| A
-```
-
-Claude can help users by:
-- Explaining complex Kubernetes concepts
-- Running commands against your cluster
-- Troubleshooting issues
-- Suggesting optimizations
-- Crafting Kubernetes manifests
-
-## Quick Start with Claude Desktop
-
-Get Claude helping with your Kubernetes clusters in under 2 minutes:
-
-1. **Create or update your Claude Desktop configuration file**:
-   - **macOS**: Edit `$HOME/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows**: Edit `%APPDATA%\Claude\claude_desktop_config.json`
-   - **Linux**: Edit `$HOME/.config/Claude/claude_desktop_config.json`
-
-   ```json
-   {
-     "mcpServers": {
-       "kubernetes": {
-         "command": "docker",
-         "args": [
-           "run",
-           "-i",
-           "--rm",
-           "-v",
-           "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
-           "ghcr.io/alexei-led/k8s-mcp-server:latest"
-         ]
-       }
-     }
-   }
-   ```
-
-2. **Restart Claude Desktop**
-   - After restart, you'll see the Tools icon (🔨) in the bottom right of your input field
-   - This indicates Claude can now access K8s tools via the MCP server
-
-3. **Start using K8s tools directly in Claude Desktop**:
-   - "What Kubernetes contexts do I have available?"
-   - "Show me all pods in the default namespace"
-   - "Create a deployment with 3 replicas of nginx:1.21"
-   - "Explain what's wrong with my StatefulSet 'database' in namespace 'prod'"
-   - "Deploy the bitnami/wordpress chart with Helm and set service type to LoadBalancer"
-
-> **Note**: Claude Desktop will automatically route K8s commands through the MCP server, allowing natural conversation about your clusters without leaving the Claude interface.
-
-> **Cloud Providers**: For AWS EKS, GKE, or Azure AKS, you'll need additional configuration. See the [Cloud Provider Support](./docs/cloud-providers.md) guide.
-
-## Features
-
-- **Multiple Kubernetes Tools**: `kubectl`, `helm`, `istioctl`, and `argocd` in one container
-- **Cloud Providers**: Native support for AWS EKS, Google GKE, and Azure AKS
-- **Security**: Runs as non-root user with strict command validation
-- **Command Piping**: Support for common Unix tools like `jq`, `grep`, and `sed`
-- **Easy Configuration**: Simple environment variables for customization
-
-## Documentation
-
-- [Getting Started Guide](./docs/getting-started.md) - Detailed setup instructions
-- [Cloud Provider Support](./docs/cloud-providers.md) - EKS, GKE, and AKS configuration
-- [Supported Tools](./docs/supported-tools.md) - Complete list of all included CLI tools
-- [Environment Variables](./docs/environment-variables.md) - Configuration options
-- [Security Features](./docs/security.md) - Security modes and custom rules
-- [Claude Integration](./docs/claude-integration.md) - Detailed Claude Desktop setup
-- [Architecture](./docs/architecture.md) - System architecture and components
-- [Detailed Specification](./docs/spec.md) - Complete technical specification
-
-## Usage Examples
-
-Once connected, you can ask Claude to help with Kubernetes tasks using natural language:
+## 工作原理
 
 ```mermaid
-flowchart TB
-    subgraph "Basic Commands"
-        A1["Show me all pods in the default namespace"]
-        A2["Get all services across all namespaces"]
-        A3["Display the logs for the nginx pod"]
+graph TD
+    subgraph "客户端 (例如：LLM Agent, mcphost)"
+        A["用户/LLM"]
     end
     
-    subgraph "Troubleshooting"
-        B1["Why is my deployment not starting?"]
-        B2["Describe the failing pod and explain the error"]
-        B3["Check if my service is properly connected to the pods"]
+    subgraph "K8s MCP 服务器 (FastAPI 应用)"
+        B["MCP 端点 (/mcp)"]
+        C["工具端点 (/tools/kubectl)"]
+        D["执行引擎"]
     end
+
+    subgraph "目标环境"
+        E["目标 Kubernetes 集群"]
+    end
+
+    A -->|"1. MCP 客户端连接到 /mcp"| B;
+    B -->|"2. 发现可用工具 (kubectl, helm...)"| A;
+    A -->|"3. 发起工具调用请求 (含 command 和 kubeconfig)"| C;
+    C -->|"4. 调用执行引擎"| D;
+    D -->|"5. 创建临时 kubeconfig 并执行命令"| E;
+    E -->|"6. 返回结果"| D;
+    D -->|"7. 返回 CommandResponse"| C;
+    C -->|"8. 将结果通过 MCP 返回"| A;
+```
+
+## 快速入门
+
+### 1. 运行 K8s MCP 服务器
+
+使用 Docker 在本地快速启动服务器：
+
+```bash
+docker run -d --rm -p 9096:9096 --name mcp-server \
+  ghcr.io/tadata-org/k8s-mcp-server:latest
+```
+服务器现在正在 `http://localhost:9096` 上运行。您可以访问 `http://localhost:9096/docs` 查看所有可用的工具和其 API 文档。
+
+### 2. 在 MCP 客户端中配置
+
+对于任何支持 MCP 的客户端（如 `mcphost`、Cursor、Claude Desktop 等），请添加以下配置：
+
+  ```json
+  {
+    "mcpServers": {
+      "kubernetes": {
+        "url": "http://localhost:9096/mcp"
+      }
+    }
+  }
+  ```
+  *将 `localhost` 替换为 `k8s-mcp-server` 运行主机的 IP 地址（如果不在同一台机器上）。*
+
+### 3. 开始使用
+
+启动您的 MCP 客户端后，它将自动发现 K8s MCP 服务器提供的工具。现在您可以开始发出指令了。
+
+- "使用 kubectl 工具，执行命令 `get pods -n default`。"
+- "帮我检查 `prod` 命名空间中 `nginx-deployment` 的状态。"
+
+## API 使用示例 (Curl)
+
+您可以直接通过 `curl` 与服务器的工具端点交互。
+
+1.  将您的 `kubeconfig` 内容进行 Base64 编码：
+    ```bash
+    # macOS
+    KUBECONFIG_B64=$(cat ~/.kube/config | base64)
     
-    subgraph "Deployments & Configuration"
-        C1["Deploy the Nginx Helm chart"]
-        C2["Create a deployment with 3 replicas of nginx:latest"]
-        C3["Set up an ingress for my service"]
-    end
+    # Linux
+    KUBECONFIG_B64=$(cat ~/.kube/config | base64 -w 0)
+    ```
+
+2.  向 `/tools/kubectl` 端点发送请求：
+    ```bash
+    curl -X POST http://localhost:9096/tools/kubectl \
+      -H "Content-Type: application/json" \
+      -d @- << EOF
+    {
+      "command": "get pods -n default",
+      "kubeconfig": "$KUBECONFIG_B64"
+    }
+    EOF
+    ```
     
-    subgraph "Advanced Operations"
-        D1["Check the status of my Istio service mesh"]
-        D2["Set up a canary deployment with 20% traffic to v2"]
-        D3["Create an ArgoCD application for my repo"]
-    end
-```
+    您将收到一个 JSON 响应，其中包含命令执行的结果。
 
-Claude can understand your intent and run the appropriate kubectl, helm, istioctl, or argocd commands based on your request. It can then explain the output in simple terms or help you troubleshoot issues.
+## 功能特性
 
-## Advanced Claude Desktop Configuration
+-   **多种 Kubernetes 工具**：`kubectl`、`helm`、`istioctl` 和 `argocd`。
+-   **云提供商原生支持**：由于 `kubeconfig` 是动态传入的，因此原生支持任何符合标准的 Kubernetes 集群，包括 AWS EKS、Google GKE 和 Azure AKS。
+-   **安全性**：以非 root 用户在容器中运行。
+-   **轻松配置**：通过环境变量进行简单配置。
 
-Configure Claude Desktop to optimize your Kubernetes workflow:
+## 文档
 
-### Target Specific Clusters and Namespaces
+-   **API 文档**: 启动服务器后，请访问 `/docs` 路径以获取完整的交互式 API 文档。
+-   **fastapi-mcp 文档**: [https://github.com/tadata-org/fastapi_mcp](https://github.com/tadata-org/fastapi_mcp)
 
-```json
-{
-  "mcpServers": {
-    "kubernetes": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-v", "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
-        "-e", "K8S_CONTEXT=production-cluster",
-        "-e", "K8S_NAMESPACE=my-application",
-        "-e", "K8S_MCP_TIMEOUT=600",
-        "ghcr.io/alexei-led/k8s-mcp-server:latest"
-      ]
-    }
-  }
-}
-```
+## 贡献
 
-### Connect to AWS EKS Clusters
-
-```json
-{
-  "mcpServers": {
-    "kubernetes": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-v", "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
-        "-v", "/Users/YOUR_USER_NAME/.aws:/home/appuser/.aws:ro",
-        "-e", "AWS_PROFILE=production",
-        "-e", "AWS_REGION=us-west-2",
-        "ghcr.io/alexei-led/k8s-mcp-server:latest"
-      ]
-    }
-  }
-}
-```
-
-### Connect to Google GKE Clusters
-
-```json
-{
-  "mcpServers": {
-    "kubernetes": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-v", "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
-        "-v", "/Users/YOUR_USER_NAME/.config/gcloud:/home/appuser/.config/gcloud:ro",
-        "-e", "CLOUDSDK_CORE_PROJECT=my-gcp-project",
-        "-e", "CLOUDSDK_COMPUTE_REGION=us-central1",
-        "ghcr.io/alexei-led/k8s-mcp-server:latest"
-      ]
-    }
-  }
-}
-```
-
-### Connect to Azure AKS Clusters
-
-```json
-{
-  "mcpServers": {
-    "kubernetes": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-v", "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
-        "-v", "/Users/YOUR_USER_NAME/.azure:/home/appuser/.azure:ro",
-        "-e", "AZURE_SUBSCRIPTION=my-subscription-id",
-        "ghcr.io/alexei-led/k8s-mcp-server:latest"
-      ]
-    }
-  }
-}
-```
-
-### Permissive Security Mode
-
-```json
-{
-  "mcpServers": {
-    "kubernetes": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-v", "/Users/YOUR_USER_NAME/.kube:/home/appuser/.kube:ro",
-        "-e", "K8S_MCP_SECURITY_MODE=permissive",
-        "ghcr.io/alexei-led/k8s-mcp-server:latest"
-      ]
-    }
-  }
-}
-```
-
-> For detailed security configuration options, see [Security Documentation](./docs/security.md).
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+我们欢迎社区的贡献！请随时提交问题和拉取请求。 

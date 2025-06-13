@@ -2,7 +2,7 @@
 ARG PYTHON_VERSION=3.13-slim
 
 # =========== BUILDER STAGE ===========
-FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION} AS builder
+FROM --platform=${TARGETPLATFORM} docker.io/library/python:${PYTHON_VERSION} AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir wheel && \
     pip wheel --no-cache-dir --wheel-dir=/wheels -e .
 
 # =========== FINAL STAGE ===========
-FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION}
+FROM --platform=${TARGETPLATFORM} docker.io/library/python:${PYTHON_VERSION}
 
 # Set target architecture argument
 ARG TARGETPLATFORM
@@ -185,9 +185,8 @@ LABEL maintainer="Alexei Ledenev" \
       org.opencontainers.image.version="1.3.0" \
       org.opencontainers.image.created="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-# Expose the service port (only needed if using SSE transport)
-EXPOSE 8080
+# Expose the port the app runs on
+EXPOSE 9096
 
-# Set command to run the server with proper signal handling
-# The ENTRYPOINT format ensures proper signal forwarding to the Python process
-ENTRYPOINT ["python", "-m", "k8s_mcp_server"]
+# Command to run the application
+CMD ["uvicorn", "k8s_mcp_server.app:app", "--host", "0.0.0.0", "--port", "9096"]

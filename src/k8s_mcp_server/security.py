@@ -1,60 +1,36 @@
-"""Security utilities for K8s MCP Server.
-
-This module provides security validation for Kubernetes CLI commands,
-including validation of command structure, dangerous command detection,
-and pipe command validation.
-"""
+"""Security utilities for K8s MCP Server."""
 
 import logging
 import re
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
-from k8s_mcp_server.config import SECURITY_CONFIG_PATH, SECURITY_MODE
-from k8s_mcp_server.tools import (
-    ALLOWED_K8S_TOOLS,
-    is_pipe_command,
-    is_valid_k8s_tool,
-    split_pipe_command,
-    validate_unix_command,
-)
+from k8s_mcp_server.config import K8sMcpConfig
 
 logger = logging.getLogger(__name__)
 
-# Default dictionary of potentially dangerous commands for each CLI tool
+ALLOWED_K8S_TOOLS = ["kubectl", "helm", "istioctl", "argocd"]
+ALLOWED_UNIX_TOOLS = ["grep", "sed", "awk", "jq", "yq", "cut", "sort", "head", "tail"]
+
 DEFAULT_DANGEROUS_COMMANDS: dict[str, list[str]] = {
     "kubectl": [
-        "kubectl delete",  # Global delete without specific resource
+        "kubectl delete",
         "kubectl drain",
         "kubectl replace --force",
-        "kubectl exec",  # Handled specially to prevent interactive shells
-        "kubectl port-forward",  # Could expose services externally
-        "kubectl cp",  # File system access
-        "kubectl delete pods --all",  # Added for test - delete all pods
+        "kubectl exec",
+        "kubectl port-forward",
+        "kubectl cp",
+        "kubectl delete pods --all",
     ],
-    "istioctl": [
-        "istioctl experimental",
-        "istioctl proxy-config",  # Can access sensitive information
-        "istioctl dashboard",  # Could expose services
-    ],
-    "helm": [
-        "helm delete",
-        "helm uninstall",
-        "helm rollback",
-        "helm upgrade",  # Could break services
-    ],
-    "argocd": [
-        "argocd app delete",
-        "argocd cluster rm",
-        "argocd repo rm",
-        "argocd app set",  # Could modify application settings
-    ],
+    "istioctl": ["istioctl experimental", "istioctl proxy-config", "istioctl dashboard"],
+    "helm": ["helm delete", "helm uninstall", "helm rollback", "helm upgrade"],
+    "argocd": ["argocd app delete", "argocd cluster rm", "argocd repo rm", "argocd app set"],
 }
 
-# Default dictionary of safe patterns that override the dangerous commands
 DEFAULT_SAFE_PATTERNS: dict[str, list[str]] = {
     "kubectl": [
         "kubectl delete pod",
@@ -62,300 +38,130 @@ DEFAULT_SAFE_PATTERNS: dict[str, list[str]] = {
         "kubectl delete service",
         "kubectl delete configmap",
         "kubectl delete secret",
-        # Specific exec commands that are safe
         "kubectl exec --help",
-        "kubectl exec -it",  # Allow interactive mode that's explicitly requested
+        "kubectl exec -it",
         "kubectl exec pod",
         "kubectl exec deployment",
         "kubectl port-forward --help",
         "kubectl cp --help",
     ],
-    "istioctl": [
-        "istioctl experimental -h",
-        "istioctl experimental --help",
-        "istioctl proxy-config --help",
-        "istioctl dashboard --help",
-    ],
-    "helm": [
-        "helm delete --help",
-        "helm uninstall --help",
-        "helm rollback --help",
-        "helm upgrade --help",
-    ],
-    "argocd": [
-        "argocd app delete --help",
-        "argocd cluster rm --help",
-        "argocd repo rm --help",
-        "argocd app set --help",
-    ],
+    "istioctl": ["istioctl experimental -h", "istioctl experimental --help", "istioctl proxy-config --help", "istioctl dashboard --help"],
+    "helm": ["helm delete --help", "helm uninstall --help", "helm rollback --help", "helm upgrade --help"],
+    "argocd": ["argocd app delete --help", "argocd cluster rm --help", "argocd repo rm --help", "argocd app set --help"],
 }
-
 
 @dataclass
 class ValidationRule:
-    """Represents a command validation rule."""
-
     pattern: str
     description: str
     error_message: str
-    regex: bool = False
-
 
 @dataclass
 class SecurityConfig:
-    """Security configuration for command validation."""
-
     dangerous_commands: dict[str, list[str]]
     safe_patterns: dict[str, list[str]]
-    regex_rules: dict[str, list[ValidationRule]] = None
+    regex_rules: dict[str, list[ValidationRule]]
 
-    def __post_init__(self):
-        """Initialize default values."""
-        if self.regex_rules is None:
-            self.regex_rules = {}
-
-
-# Load security configuration from YAML file if available
-def load_security_config() -> SecurityConfig:
-    """Load security configuration from YAML file or use defaults."""
+def load_security_config(config_path_str: Optional[str]) -> SecurityConfig:
     dangerous_commands = DEFAULT_DANGEROUS_COMMANDS.copy()
     safe_patterns = DEFAULT_SAFE_PATTERNS.copy()
     regex_rules = {}
 
-    if SECURITY_CONFIG_PATH:
-        config_path = Path(SECURITY_CONFIG_PATH)
+    if config_path_str:
+        config_path = Path(config_path_str)
         if config_path.exists():
             try:
                 with open(config_path) as f:
                     config_data = yaml.safe_load(f)
-
-                # Update dangerous commands
-                if "dangerous_commands" in config_data:
-                    for tool, commands in config_data["dangerous_commands"].items():
-                        dangerous_commands[tool] = commands
-
-                # Update safe patterns
-                if "safe_patterns" in config_data:
-                    for tool, patterns in config_data["safe_patterns"].items():
-                        safe_patterns[tool] = patterns
-
-                # Load regex rules
-                if "regex_rules" in config_data:
-                    for tool, rules in config_data["regex_rules"].items():
-                        regex_rules[tool] = []
-                        for rule in rules:
-                            regex_rules[tool].append(
-                                ValidationRule(
-                                    pattern=rule["pattern"],
-                                    description=rule["description"],
-                                    error_message=rule.get("error_message", f"Command matches restricted pattern: {rule['pattern']}"),
-                                    regex=True,
-                                )
-                            )
-
+                if config_data and isinstance(config_data, dict):
+                    if config_data.get("dangerous_commands"):
+                        dangerous_commands.update(config_data["dangerous_commands"])
+                    if config_data.get("safe_patterns"):
+                        safe_patterns.update(config_data["safe_patterns"])
+                    if config_data.get("regex_rules"):
+                        for tool, rules in config_data["regex_rules"].items():
+                            if tool in ALLOWED_K8S_TOOLS:
+                                regex_rules[tool] = [ValidationRule(**rule) for rule in rules]
                 logger.info(f"Loaded security configuration from {config_path}")
             except Exception as e:
-                logger.error(f"Error loading security configuration: {str(e)}")
-                logger.warning("Using default security configuration")
-
-    return SecurityConfig(dangerous_commands=dangerous_commands, safe_patterns=safe_patterns, regex_rules=regex_rules)
-
-
-# Initialize security configuration
-SECURITY_CONFIG = load_security_config()
-
+                logger.error(f"Error loading security configuration: {str(e)}, using defaults.")
+    return SecurityConfig(dangerous_commands, safe_patterns, regex_rules)
 
 def is_safe_exec_command(command: str) -> bool:
-    """Check if a kubectl exec command is safe to execute.
-
-    We consider a kubectl exec command safe if:
-    1. It's explicitly interactive (-it, -ti flags) and the user is aware of this
-    2. It executes a specific command rather than opening a general shell
-    3. It uses shells (bash/sh) only with specific commands (-c flag)
-
-    Args:
-        command: The kubectl exec command
-
-    Returns:
-        True if the command is safe, False otherwise
-    """
     if not command.startswith("kubectl exec"):
-        return True  # Not an exec command
-
-    # Special cases: help and version are always safe
-    if " --help" in command or " -h" in command or " version" in command:
         return True
-
-    # Check for explicit interactive mode
-    has_interactive = any(flag in command for flag in [" -i ", " --stdin ", " -it ", " -ti ", " -t ", " --tty "])
-
-    # List of dangerous shell commands that should not be executed without arguments
-    dangerous_shell_patterns = [
-        " -- sh",
-        " -- bash",
-        " -- /bin/sh",
-        " -- /bin/bash",
-        " -- zsh",
-        " -- /bin/zsh",
-        " -- ksh",
-        " -- /bin/ksh",
-        " -- csh",
-        " -- /bin/csh",
-        " -- /usr/bin/bash",
-        " -- /usr/bin/sh",
-        " -- /usr/bin/zsh",
-        " -- /usr/bin/ksh",
-        " -- /usr/bin/csh",
-    ]
-
-    # Check if any of the dangerous shell patterns are present
-    has_shell_pattern = False
-    for pattern in dangerous_shell_patterns:
-        if pattern in command + " ":  # Add space to match end of command
-            has_shell_pattern = True
-            # If shell is used with -c flag to run a specific command, that's acceptable
-            if f"{pattern} -c " in command or f"{pattern.strip()} -c " in command:
-                return True
-
-    # Safe conditions:
-    # 1. Not using a shell at all
-    # 2. Interactive mode is explicitly requested (user knows they're getting a shell)
-    if not has_shell_pattern:
-        return True  # Not using a shell
-
-    if has_interactive and has_shell_pattern:
-        # If interactive is explicitly requested and using a shell,
-        # we consider it an intentional interactive shell request
+    if " --help" in command or " -h" in command:
         return True
+    
+    dangerous_shells = [" sh", " bash", " zsh", " ksh", " csh"]
+    has_shell = any(f" --{shell.strip()}" in command for shell in dangerous_shells)
+    has_interactive_flags = " -it " in command or " -ti " in command
 
-    # Default: If using a shell without explicit command (-c) and not explicitly
-    # requesting interactive mode, consider it unsafe
-    return False
+    if has_shell and not has_interactive_flags and " -c " not in command:
+        return False
+    
+    return True
 
-
-def validate_k8s_command(command: str) -> None:
-    """Validate that the command is a proper Kubernetes CLI tool command.
-
-    Args:
-        command: The Kubernetes CLI command to validate
-
-    Raises:
-        ValueError: If the command is invalid
-    """
+def validate_k8s_command(command: str, sec_config: SecurityConfig) -> None:
     logger.debug(f"Validating K8s command: {command}")
-
-    # Skip validation in permissive mode
-    if SECURITY_MODE.lower() == "permissive":
-        logger.warning(f"Running in permissive security mode, skipping validation for: {command}")
-        return
-
-    cmd_parts = shlex.split(command)
+    
+    try:
+        cmd_parts = shlex.split(command)
+    except ValueError as e:
+        raise ValueError(f"Invalid command syntax: {e}")
+    
     if not cmd_parts:
-        raise ValueError("Empty command")
+        raise ValueError("Empty K8s command.")
 
-    cli_tool = cmd_parts[0]
-    if not is_valid_k8s_tool(cli_tool):
-        raise ValueError(f"Command must start with a supported CLI tool: {', '.join(ALLOWED_K8S_TOOLS)}")
+    tool = cmd_parts[0]
+    if tool not in ALLOWED_K8S_TOOLS:
+        raise ValueError(f"Disallowed tool: '{tool}'. Only {ALLOWED_K8S_TOOLS} are supported.")
 
-    if len(cmd_parts) < 2:
-        raise ValueError(f"Command must include a {cli_tool} action")
+    if tool in sec_config.dangerous_commands:
+        for dangerous in sec_config.dangerous_commands[tool]:
+            if command.startswith(dangerous):
+                is_safe = False
+                if tool in sec_config.safe_patterns:
+                    for safe in sec_config.safe_patterns[tool]:
+                        if command.startswith(safe):
+                            is_safe = True
+                            break
+                if not is_safe:
+                    raise ValueError(f"Potentially dangerous command blocked: '{command}'")
 
-    # Special case for kubectl exec
-    if cli_tool == "kubectl" and "exec" in cmd_parts:
-        if not is_safe_exec_command(command):
-            raise ValueError("Interactive shells via kubectl exec are restricted. Use explicit commands or proper flags (-it, --command, etc).")
-
-    # Apply regex rules for more advanced pattern matching
-    if cli_tool in SECURITY_CONFIG.regex_rules:
-        for rule in SECURITY_CONFIG.regex_rules[cli_tool]:
-            pattern = re.compile(rule.pattern)
-            if pattern.search(command):
+    if tool in sec_config.regex_rules:
+        for rule in sec_config.regex_rules[tool]:
+            if re.search(rule.pattern, command):
                 raise ValueError(rule.error_message)
 
-    # Check against dangerous commands
-    if cli_tool in SECURITY_CONFIG.dangerous_commands:
-        for dangerous_cmd in SECURITY_CONFIG.dangerous_commands[cli_tool]:
-            if command.startswith(dangerous_cmd):
-                # Check if it matches a safe pattern
-                if cli_tool in SECURITY_CONFIG.safe_patterns:
-                    if any(command.startswith(safe_pattern) for safe_pattern in SECURITY_CONFIG.safe_patterns[cli_tool]):
-                        logger.debug(f"Command matches safe pattern: {command}")
-                        return  # Safe pattern match, allow command
+    if tool == "kubectl" and "exec" in cmd_parts and not is_safe_exec_command(command):
+        raise ValueError("Unsafe 'kubectl exec': interactive shells require '-it' flags.")
 
-                raise ValueError(
-                    f"This command ({dangerous_cmd}) is restricted for safety reasons. Please use a more specific form with resource type and name."
-                )
+def validate_unix_command(command: str):
+    if not command:
+        raise ValueError("Empty pipe segment.")
+    try:
+        tool = shlex.split(command)[0]
+    except (ValueError, IndexError):
+        raise ValueError("Invalid pipe segment.")
+    if tool not in ALLOWED_UNIX_TOOLS:
+        raise ValueError(f"Disallowed Unix tool in pipe: '{tool}'")
 
-    logger.debug(f"Command validation successful: {command}")
+def validate_pipe_command(full_command: str):
+    parts = full_command.split("|")
+    for part in parts[1:]:
+        validate_unix_command(part.strip())
 
+def check_command_safety(command: str, config: K8sMcpConfig):
+    """Main entry point for security validation."""
+    sec_config = load_security_config(config.K8S_MCP_SECURITY_CONFIG_PATH)
+    
+    parts = command.split("|")
+    if not parts or not parts[0].strip():
+        raise ValueError("Empty command.")
+    
+    k8s_command = parts[0].strip()
+    validate_k8s_command(k8s_command, sec_config)
 
-def validate_pipe_command(pipe_command: str) -> None:
-    """Validate a command that contains pipes.
-
-    This checks both Kubernetes CLI commands and Unix commands within a pipe chain.
-
-    Args:
-        pipe_command: The piped command to validate
-
-    Raises:
-        ValueError: If any command in the pipe is invalid
-    """
-    logger.debug(f"Validating pipe command: {pipe_command}")
-
-    commands = split_pipe_command(pipe_command)
-
-    if not commands:
-        raise ValueError("Empty command")
-
-    # First command must be a Kubernetes CLI command
-    validate_k8s_command(commands[0])
-
-    # Subsequent commands should be valid Unix commands
-    for i, cmd in enumerate(commands[1:], 1):
-        cmd_parts = shlex.split(cmd)
-        if not cmd_parts:
-            raise ValueError(f"Empty command at position {i} in pipe")
-
-        if not validate_unix_command(cmd):
-            raise ValueError(
-                f"Command '{cmd_parts[0]}' at position {i} in pipe is not allowed. "
-                f"Only kubectl, istioctl, helm, argocd commands and basic Unix utilities are permitted."
-            )
-
-    logger.debug(f"Pipe command validation successful: {pipe_command}")
-
-
-def reload_security_config() -> None:
-    """Reload security configuration from file.
-
-    This allows for dynamic reloading of security rules without restarting the server.
-    """
-    global SECURITY_CONFIG
-    SECURITY_CONFIG = load_security_config()
-    logger.info("Security configuration reloaded")
-
-
-def validate_command(command: str) -> None:
-    """Centralized validation for all commands.
-
-    This is the main entry point for command validation.
-
-    Args:
-        command: The command to validate
-
-    Raises:
-        ValueError: If the command is invalid
-    """
-    logger.debug(f"Validating command: {command}")
-
-    # Skip validation in permissive mode
-    if SECURITY_MODE.lower() == "permissive":
-        logger.warning(f"Running in permissive security mode, skipping validation for: {command}")
-        return
-
-    if is_pipe_command(command):
+    if len(parts) > 1:
         validate_pipe_command(command)
-    else:
-        validate_k8s_command(command)
-
-    logger.debug(f"Command validation successful: {command}")

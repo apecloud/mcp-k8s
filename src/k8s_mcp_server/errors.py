@@ -6,7 +6,7 @@ including exception classes and helper functions for creating structured error r
 
 from typing import Any
 
-from k8s_mcp_server.tools import CommandResult, ErrorDetails, ErrorDetailsNested
+from k8s_mcp_server.models import CommandResult, ErrorDetails
 
 
 class K8sMCPError(Exception):
@@ -91,7 +91,7 @@ def create_error_result(error: K8sMCPError, command: str | None = None, exit_cod
         CommandResult with error details
     """
     # Create nested error details
-    nested_details = ErrorDetailsNested()
+    nested_details: dict[str, Any] = {}
     if command:
         nested_details["command"] = command
     if exit_code is not None:
