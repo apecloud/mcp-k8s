@@ -62,19 +62,14 @@ docker-buildx:
 	docker buildx create --name mybuilder --use
 	docker buildx build --platform linux/amd64,linux/arm64 -t k8s-mcp-server -f deploy/docker/Dockerfile .
 
-# Quick build and run (simple version)
-docker-quick:
-	docker build -t k8s-mcp-server-simple -f Dockerfile.simple .
-
-docker-quick-run:
-	docker run --rm -p 9096:9096 k8s-mcp-server-simple
-
-# One-click build and run script
+# One-click build and run using full Docker image
 quick-start:
-	./build_and_run.sh
+	docker build -t k8s-mcp-server -f deploy/docker/Dockerfile .
+	docker run --rm -p 9096:9096 -v ~/.kube:/home/appuser/.kube:ro k8s-mcp-server
 
 quick-start-proxy:
-	SET_PROXY=1 ./build_and_run.sh
+	docker build --build-arg http_proxy=${http_proxy} --build-arg https_proxy=${https_proxy} --build-arg all_proxy=${all_proxy} -t k8s-mcp-server -f deploy/docker/Dockerfile .
+	docker run --rm -p 9096:9096 -v ~/.kube:/home/appuser/.kube:ro k8s-mcp-server
 
 # Help
 help:
@@ -97,7 +92,5 @@ help:
 	@echo "  docker-compose-logs - View Docker Compose logs"
 	@echo "  docker-compose-down - Stop Docker Compose services"
 	@echo "  docker-buildx   - Build multi-architecture Docker image"
-	@echo "  docker-quick    - Quick build using simplified Dockerfile"
-	@echo "  docker-quick-run - Run quick build image temporarily"
-	@echo "  quick-start     - One-click build and run with persistence"
-	@echo "  quick-start-proxy - One-click build and run with proxy"
+	@echo "  quick-start     - One-click build and run using full Docker image"
+	@echo "  quick-start-proxy - One-click build and run with proxy using full Docker image"

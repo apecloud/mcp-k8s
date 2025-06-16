@@ -1,0 +1,6 @@
+apiVersion: v2
+name: k8s-mcp-server
+description: A Helm chart for deploying the K8s MCP Server
+type: application
+version: 0.1.0
+appVersion: "1.0.0" 
