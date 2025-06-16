@@ -17,7 +17,7 @@ if [ -z "$MODE" ] || { [ "$MODE" != "local" ] && [ "$MODE" != "docker" ]; }; the
 fi
 
 # --- Common variables ---
-SERVER_URL="http://localhost:9096/sse"
+SERVER_URL="http://localhost:9096/tools/kubectl"
 KUBECONFIG_PATH="/Users/cccmmmddd/GolandProjects/apecloud/dev-kubeconfig"
 LOG_FILE="server.log"
 SERVER_PID=""
@@ -101,12 +101,12 @@ KUBECONFIG_CONTENT=$(cat "${KUBECONFIG_PATH}")
 # Create the JSON payload in the temporary file
 # Using jo would be safer, but for now, manual JSON creation with escaped newlines.
 # Update: Using a more robust printf to build the JSON and avoid escaping issues.
-printf '{"command": "kubectl get pods", "kubeconfig": %s}' "$(awk -v ORS='\\n' '1' "${KUBECONFIG_PATH}" | sed 's/"/\\"/g' | tr -d '\n' | xargs -0 printf '"%s"') " > "$JSON_PAYLOAD_FILE"
+printf '{"command": "get pods", "kubeconfig": %s}' "$(awk -v ORS='\\n' '1' "${KUBECONFIG_PATH}" | sed 's/"/\\"/g' | tr -d '\n' | xargs -0 printf '"%s"') " > "$JSON_PAYLOAD_FILE"
 
 echo "--- Testing server with 'kubectl get pods' ---"
 # Temporarily disable 'exit on error' to allow us to capture the exit code and logs
 set +e
-RESPONSE=$(curl -s --fail -N -X POST ${SERVER_URL} \
+RESPONSE=$(curl -s --fail -X POST ${SERVER_URL} \
   -H "Content-Type: application/json" \
   -d @"$JSON_PAYLOAD_FILE"
 )
@@ -122,13 +122,13 @@ if [ $CURL_EXIT_CODE -ne 0 ]; then
     exit 1
 fi
 
-# We expect a control event at the end of a successful stream
-if echo "$RESPONSE" | grep -q "event: control"; then
-  echo "✅ Test successful: Server responded with a control event."
+# We expect a JSON response with success field
+if echo "$RESPONSE" | grep -q '"success"'; then
+  echo "✅ Test successful: Server responded with JSON result."
   echo "--- Full response ---"
   echo "$RESPONSE"
 else
-  echo "❌ Test failed: Did not receive the expected control event."
+  echo "❌ Test failed: Did not receive the expected JSON response."
   echo "--- Full response ---"
   echo "$RESPONSE"
   echo ""

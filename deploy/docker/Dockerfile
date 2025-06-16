@@ -4,6 +4,16 @@ ARG PYTHON_VERSION=3.11-slim
 # =========== BUILDER STAGE ===========
 FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION} AS builder
 
+# Accept proxy build arguments
+ARG http_proxy
+ARG https_proxy
+ARG all_proxy
+
+# Set proxy environment variables
+ENV http_proxy=${http_proxy}
+ENV https_proxy=${https_proxy}
+ENV all_proxy=${all_proxy}
+
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -23,6 +33,16 @@ RUN pip install --no-cache-dir wheel && \
 
 # =========== FINAL STAGE ===========
 FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION}
+
+# Accept proxy build arguments
+ARG http_proxy
+ARG https_proxy
+ARG all_proxy
+
+# Set proxy environment variables for this stage
+ENV http_proxy=${http_proxy}
+ENV https_proxy=${https_proxy}
+ENV all_proxy=${all_proxy}
 
 # Set target architecture argument
 ARG TARGETPLATFORM

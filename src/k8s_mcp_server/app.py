@@ -10,7 +10,7 @@ import tempfile
 import uuid
 from typing import Dict, List, Optional, Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel, Field
 from fastapi_mcp import FastApiMCP
 
@@ -145,56 +145,68 @@ async def execute_command_logic(
           operation_id="kubectl",
           summary="Execute kubectl commands",
           description="Execute Kubernetes kubectl commands. Supports namespace parameter for resource operations.")
-async def run_kubectl(req: CommandRequest):
+async def run_kubectl(req: CommandRequest, x_kubeconfig: Optional[str] = Header(None, alias="X-Kubeconfig")):
     """
     Execute a kubectl command.
 
     This endpoint receives a command and optionally a namespace and a kubeconfig.
-    It uses the `execute_command_logic` function to run the command.
+    Kubeconfig can be provided either through request body or X-Kubeconfig header.
+    Header takes precedence over request body parameter.
     """
-    return await execute_command_logic("kubectl", req.command, req.namespace, req.kubeconfig)
+    # Use header kubeconfig if provided, otherwise fall back to request body
+    kubeconfig = x_kubeconfig or req.kubeconfig
+    return await execute_command_logic("kubectl", req.command, req.namespace, kubeconfig)
 
 @app.post("/tools/helm", 
           response_model=CommandResponse,
           operation_id="helm",
           summary="Execute helm commands", 
           description="Execute Helm package manager commands. Supports namespace parameter for deployments.")
-async def run_helm(req: CommandRequest):
+async def run_helm(req: CommandRequest, x_kubeconfig: Optional[str] = Header(None, alias="X-Kubeconfig")):
     """
     Execute a helm command.
 
     This endpoint receives a command and optionally a namespace and a kubeconfig.
-    It uses the `execute_command_logic` function to run the command.
+    Kubeconfig can be provided either through request body or X-Kubeconfig header.
+    Header takes precedence over request body parameter.
     """
-    return await execute_command_logic("helm", req.command, req.namespace, req.kubeconfig)
+    # Use header kubeconfig if provided, otherwise fall back to request body
+    kubeconfig = x_kubeconfig or req.kubeconfig
+    return await execute_command_logic("helm", req.command, req.namespace, kubeconfig)
 
 @app.post("/tools/istioctl", 
           response_model=CommandResponse,
           operation_id="istioctl",
           summary="Execute istioctl commands",
           description="Execute Istio service mesh commands for managing Istio configuration and troubleshooting.")
-async def run_istioctl(req: CommandRequest):
+async def run_istioctl(req: CommandRequest, x_kubeconfig: Optional[str] = Header(None, alias="X-Kubeconfig")):
     """
     Execute an istioctl command.
 
     This endpoint receives a command and optionally a namespace and a kubeconfig.
-    It uses the `execute_command_logic` function to run the command.
+    Kubeconfig can be provided either through request body or X-Kubeconfig header.
+    Header takes precedence over request body parameter.
     """
-    return await execute_command_logic("istioctl", req.command, req.namespace, req.kubeconfig)
+    # Use header kubeconfig if provided, otherwise fall back to request body
+    kubeconfig = x_kubeconfig or req.kubeconfig
+    return await execute_command_logic("istioctl", req.command, req.namespace, kubeconfig)
 
 @app.post("/tools/argocd", 
           response_model=CommandResponse,
           operation_id="argocd",
           summary="Execute argocd commands",
           description="Execute ArgoCD CLI commands for GitOps workflow management.")
-async def run_argocd(req: CommandRequest):
+async def run_argocd(req: CommandRequest, x_kubeconfig: Optional[str] = Header(None, alias="X-Kubeconfig")):
     """
     Execute an argocd command.
 
     This endpoint receives a command and optionally a namespace and a kubeconfig.
-    It uses the `execute_command_logic` function to run the command.
+    Kubeconfig can be provided either through request body or X-Kubeconfig header.
+    Header takes precedence over request body parameter.
     """
-    return await execute_command_logic("argocd", req.command, req.namespace, req.kubeconfig)
+    # Use header kubeconfig if provided, otherwise fall back to request body
+    kubeconfig = x_kubeconfig or req.kubeconfig
+    return await execute_command_logic("argocd", req.command, req.namespace, kubeconfig)
 
 # --- Health Check ---
 @app.get("/health", 

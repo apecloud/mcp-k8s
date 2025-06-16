@@ -93,7 +93,7 @@ docker run -d --rm -p 9096:9096 --name mcp-server \
     KUBECONFIG_B64=$(cat ~/.kube/config | base64 -w 0)
     ```
 
-2.  向 `/tools/kubectl` 端点发送请求：
+2.  向 `/tools/kubectl` 端点发送请求（通过请求体传递kubeconfig）：
     ```bash
     curl -X POST http://localhost:9096/tools/kubectl \
       -H "Content-Type: application/json" \
@@ -101,6 +101,18 @@ docker run -d --rm -p 9096:9096 --name mcp-server \
     {
       "command": "get pods -n default",
       "kubeconfig": "$KUBECONFIG_B64"
+    }
+    EOF
+    ```
+
+3.  或者通过HTTP header传递kubeconfig：
+    ```bash
+    curl -X POST http://localhost:9096/tools/kubectl \
+      -H "Content-Type: application/json" \
+      -H "X-Kubeconfig: $KUBECONFIG_B64" \
+      -d @- << EOF
+    {
+      "command": "get pods -n default"
     }
     EOF
     ```
