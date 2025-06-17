@@ -23,7 +23,6 @@ K8s MCP 服务器是一个基于 `fastapi-mcp` 构建的、可通过网络访问
 ## 工作原理
 
 ```mermaid
-
 graph TD
     subgraph "客户端"
         A["用户 / LLM"]
@@ -82,6 +81,76 @@ docker run -d --rm -p 9096:9096 --name mcp-server \
 
 - "使用 kubectl 工具，执行命令 `get pods -n default`。"
 - "帮我检查 `prod` 命名空间中 `nginx-deployment` 的状态。"
+
+## 本地开发与运行
+
+### 1. 运行 K8s MCP 服务器
+
+您可以使用 `Makefile` 中的 `quick-start` 命令在本地快速启动服务器：
+
+```bash
+make quick-start
+```
+
+这将构建 Docker 镜像并在本地运行容器，服务器将在 `http://localhost:9096` 上运行。
+
+### 2. 验证服务器状态
+
+一旦服务器启动，您可以通过以下 `curl` 命令验证其健康状态：
+
+```bash
+curl http://localhost:9096/health
+```
+
+如果服务器正常运行，您将收到一个成功的响应。
+
+## 从源码运行
+
+如果您希望从源码运行 K8s MCP 服务器，请遵循以下步骤：
+
+### 1. 克隆仓库
+
+如果您尚未克隆本项目的仓库，请先执行此操作：
+
+```bash
+git clone https://github.com/apecloud/mcp-k8s.git
+cd mcp-k8s
+```
+
+### 2. 创建并激活虚拟环境
+
+建议使用虚拟环境来管理项目依赖：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. 安装依赖
+
+安装项目所需的所有依赖：
+
+```bash
+pip install .
+```
+
+### 4. 运行服务器
+
+使用 `uvicorn` 启动 FastAPI 应用程序：
+
+```bash
+uvicorn src.k8s_mcp_server.app:app --host 0.0.0.0 --port 9096
+```
+
+### 5. 验证服务器状态
+
+服务器启动后，您可以使用以下 `curl` 命令验证其健康状态：
+
+```bash
+curl http://localhost:9096/health
+```
+
+如果服务器正常运行，您将收到一个成功的响应。
 
 ## API 使用示例 (Curl)
 
@@ -149,4 +218,4 @@ docker run -d --rm -p 9096:9096 --name mcp-server \
 
 ## 贡献
 
-我们欢迎社区的贡献！请随时提交问题和拉取请求。 
+我们欢迎社区的贡献！请随时提交问题和拉取请求。
