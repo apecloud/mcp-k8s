@@ -6,7 +6,7 @@ MCP_VERSION = "1.8"
 
 async def main():
     """Connects to the k8s-mcp-server and performs an MCP initialize handshake using raw httpx streaming."""
-    mcp_url = "http://localhost:8000/mcp"
+    mcp_url = "http://localhost:9096/mcp"
     client_id = "test-client-123"
     
     request_headers = {

@@ -12,7 +12,7 @@ def test_main_function():
     """Test the main function that starts the MCP server."""
     # Mock the server's run method to prevent actually starting a server
     with patch("k8s_mcp_server.server.mcp.run") as mock_run:
-        # Test with default transport (stdio)
+        # Test with default transport (sse)
         with patch.dict(os.environ, {"K8S_MCP_TRANSPORT": "stdio"}):
             # Import after patching to avoid actual execution
             from importlib import reload
@@ -44,7 +44,7 @@ def test_main_function():
         # Reset the mock for the next test
         mock_run.reset_mock()
 
-        # Test with invalid transport from environment variable (should default to stdio)
+        # Test with invalid transport from environment variable (should default to sse)
         with patch.dict(os.environ, {"K8S_MCP_TRANSPORT": "invalid"}):
             # Reload the modules to pick up the new environment variable
             reload(k8s_mcp_server.config)
@@ -52,7 +52,7 @@ def test_main_function():
 
             # Call the main function
             k8s_mcp_server.__main__.main()
-            mock_run.assert_called_once_with(transport="stdio")
+            mock_run.assert_called_once_with(transport="sse")
 
 
 @pytest.mark.unit

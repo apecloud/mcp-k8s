@@ -20,7 +20,7 @@ services:
       - ~/.azure:/home/appuser/.azure:ro
     environment:
       - PYTHONUNBUFFERED=1
-      - K8S_MCP_TRANSPORT=stdio
+      - K8S_MCP_TRANSPORT=sse
       - K8S_MCP_SECURITY_MODE=strict
       - K8S_MCP_SECURITY_CONFIG=/app/security_config.yaml
       - USE_GKE_GCLOUD_AUTH_PLUGIN=True

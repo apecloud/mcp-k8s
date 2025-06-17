@@ -4,11 +4,6 @@ ARG PYTHON_VERSION=3.11-slim
 # =========== BUILDER STAGE ===========
 FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION} AS builder
 
-# Accept proxy build arguments
-ARG http_proxy
-ARG https_proxy
-ARG all_proxy
-
 # Set proxy environment variables
 ENV http_proxy=${http_proxy}
 ENV https_proxy=${https_proxy}
@@ -33,16 +28,6 @@ RUN pip install --no-cache-dir wheel && \
 
 # =========== FINAL STAGE ===========
 FROM --platform=${TARGETPLATFORM} python:${PYTHON_VERSION}
-
-# Accept proxy build arguments
-ARG http_proxy
-ARG https_proxy
-ARG all_proxy
-
-# Set proxy environment variables for this stage
-ENV http_proxy=${http_proxy}
-ENV https_proxy=${https_proxy}
-ENV all_proxy=${all_proxy}
 
 # Set target architecture argument
 ARG TARGETPLATFORM
@@ -189,7 +174,7 @@ USER appuser
 ENV HOME="/home/appuser" \
     PATH="/usr/local/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
-    K8S_MCP_TRANSPORT=stdio \
+    K8S_MCP_TRANSPORT=sse \
     K8S_MCP_SECURITY_MODE=strict \
     K8S_MCP_SECURITY_CONFIG=/app/security_config.yaml \
     USE_GKE_GCLOUD_AUTH_PLUGIN=True
