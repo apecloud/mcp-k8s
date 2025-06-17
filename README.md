@@ -1,12 +1,14 @@
 # K8s MCP 服务器
 
-[![CI 状态](https://github.com/tadata-org/k8s-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/tadata-org/k8s-mcp-server/actions/workflows/ci.yml)
-[![发布状态](https://github.com/tadata-org/k8s-mcp-server/actions/workflows/release.yml/badge.svg)](https://github.com/tadata-org/k8s-mcp-server/actions/workflows/release.yml)
-[![codecov](https://codecov.io/gh/tadata-org/k8s-mcp-server/graph/badge.svg)](https://codecov.io/gh/tadata-org/k8s-mcp-server)
+[![CI 状态](https://github.com/apecloud/mcp-k8s/actions/workflows/ci.yml/badge.svg)](https://github.com/apecloud/mcp-k8s/actions/workflows/ci.yml)
+[![发布状态](https://github.com/apecloud/mcp-k8s/actions/workflows/release.yml/badge.svg)](https://github.com/apecloud/mcp-k8s/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/apecloud/mcp-k8s/graph/badge.svg)](https://codecov.io/gh/apecloud/mcp-k8s)
 [![镜像标签](https://ghcr-badge.egpl.dev/tadata-org/k8s-mcp-server/tags?color=%2344cc11&ignore=latest&n=4&label=image+tags&trim=)](https://github.com/tadata-org/k8s-mcp-server/pkgs/container/k8s-mcp-server/versions)
 [![镜像大小](https://ghcr-badge.egpl.dev/tadata-org/k8s-mcp-server/size?color=%2344cc11&tag=latest&label=image+size&trim=)](https://github.com/tadata-org/k8s-mcp-server/pkgs/container/k8s-mcp-server)
 [![Python 版本](https://img.shields.io/pypi/pyversions/k8s-mcp-server.svg)](https://pypi.org/project/k8s-mcp-server/)
-[![许可证: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![许可证: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/apecloud/mcp-k8s/blob/main/LICENSE)
+
+本项目是基于 [alexei-led/k8s-mcp-server](https://github.com/alexei-led/k8s-mcp-server) 的优秀工作。在此向原作者表示衷心的感谢！
 
 K8s MCP 服务器是一个基于 `fastapi-mcp` 构建的、可通过网络访问的服务。它使 Claude 等大型语言模型 (LLM) 能够安全地运行 Kubernetes CLI 工具（`kubectl`, `istioctl`, `helm`, `argocd`）。它通过标准的模型控制协议（MCP）提供服务，并支持在每次请求中动态传入 `kubeconfig`，从而实现对多个 Kubernetes 集群的无缝管理。
 
@@ -21,14 +23,15 @@ K8s MCP 服务器是一个基于 `fastapi-mcp` 构建的、可通过网络访问
 ## 工作原理
 
 ```mermaid
+
 graph TD
-    subgraph "客户端 (例如：LLM Agent, mcphost)"
-        A["用户/LLM"]
+    subgraph "客户端"
+        A["用户 / LLM"]
     end
     
-    subgraph "K8s MCP 服务器 (FastAPI 应用)"
+    subgraph "K8s MCP 服务器"
         B["MCP 端点 (/mcp)"]
-        C["工具端点 (/tools/kubectl)"]
+        C["工具端点"]
         D["执行引擎"]
     end
 
@@ -36,14 +39,14 @@ graph TD
         E["目标 Kubernetes 集群"]
     end
 
-    A -->|"1. MCP 客户端连接到 /mcp"| B;
-    B -->|"2. 发现可用工具 (kubectl, helm...)"| A;
-    A -->|"3. 发起工具调用请求 (含 command 和 kubeconfig)"| C;
-    C -->|"4. 调用执行引擎"| D;
-    D -->|"5. 创建临时 kubeconfig 并执行命令"| E;
-    E -->|"6. 返回结果"| D;
-    D -->|"7. 返回 CommandResponse"| C;
-    C -->|"8. 将结果通过 MCP 返回"| A;
+    A -->|"MCP 客户端连接到 /mcp"| B;
+    B -->|"发现可用工具"| A;
+    A -->|"发起工具调用请求"| C;
+    C -->|"调用执行引擎"| D;
+    D -->|"创建临时 kubeconfig 并执行命令"| E;
+    E -->|"返回结果"| D;
+    D -->|"返回 CommandResponse"| C;
+    C -->|"将结果通过 MCP 返回"| A;
 ```
 
 ## 快速入门
@@ -54,7 +57,7 @@ graph TD
 
 ```bash
 docker run -d --rm -p 9096:9096 --name mcp-server \
-  ghcr.io/tadata-org/k8s-mcp-server:latest
+  docker.io/apecloud/k8s-mcp-server:latest
 ```
 服务器现在正在 `http://localhost:9096` 上运行。您可以访问 `http://localhost:9096/docs` 查看所有可用的工具和其 API 文档。
 
@@ -84,6 +87,19 @@ docker run -d --rm -p 9096:9096 --name mcp-server \
 
 您可以直接通过 `curl` 与服务器的工具端点交互。
 
+### Kubeconfig 认证方式
+
+`kubeconfig` 信息可以通过两种主要方式提供：
+
+1.  **通过 HTTP Header (`X-Kubeconfig`)**：
+    *   将 Base64 编码的 `kubeconfig` 内容放在 `X-Kubeconfig` Header 中。
+    *   **这种方式可以为大语言模型节约 Token 消耗**，因为 `kubeconfig` 不会作为请求体的一部分计入模型输入。
+
+2.  **通过请求 Body (`kubeconfig` 字段)**：
+    *   将 Base64 编码的 `kubeconfig` 内容作为 JSON 请求体中的 `kubeconfig` 字段值。
+
+**示例：**
+
 1.  将您的 `kubeconfig` 内容进行 Base64 编码：
     ```bash
     # macOS
@@ -93,19 +109,7 @@ docker run -d --rm -p 9096:9096 --name mcp-server \
     KUBECONFIG_B64=$(cat ~/.kube/config | base64 -w 0)
     ```
 
-2.  向 `/tools/kubectl` 端点发送请求（通过请求体传递kubeconfig）：
-    ```bash
-    curl -X POST http://localhost:9096/tools/kubectl \
-      -H "Content-Type: application/json" \
-      -d @- << EOF
-    {
-      "command": "get pods -n default",
-      "kubeconfig": "$KUBECONFIG_B64"
-    }
-    EOF
-    ```
-
-3.  或者通过HTTP header传递kubeconfig：
+2.  **通过请求 Header (`X-Kubeconfig`) 发送请求：**
     ```bash
     curl -X POST http://localhost:9096/tools/kubectl \
       -H "Content-Type: application/json" \
@@ -113,6 +117,18 @@ docker run -d --rm -p 9096:9096 --name mcp-server \
       -d @- << EOF
     {
       "command": "get pods -n default"
+    }
+    EOF
+    ```
+
+3.  **通过请求 Body 发送请求：**
+    ```bash
+    curl -X POST http://localhost:9096/tools/kubectl \
+      -H "Content-Type: application/json" \
+      -d @- << EOF
+    {
+      "command": "get pods -n default",
+      "kubeconfig": "$KUBECONFIG_B64"
     }
     EOF
     ```
